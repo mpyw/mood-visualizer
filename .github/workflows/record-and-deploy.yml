@@ -48,8 +48,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Parse and Record Inputs
+        id: record
         run: |
           import os, sys, json
+          import html
           from datetime import datetime, timezone, timedelta
           from pathlib import Path
 
@@ -98,10 +100,22 @@ jobs:
           with open(history_file, 'a', encoding='utf-8') as f:
               f.write(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n')
 
-          # GITHUB_ENV への出力（他stepで必要なら）
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
-              f.write(f'INPUT_YEARMONTH={input_yearmonth}\n')
-              f.write(f'HISTORY_FILE={history_file}\n')
+          # $GITHUB_STEP_SUMMARY への Markdown/HTML 出力
+          def to_jst(dt):
+              if dt.tzinfo is None:
+                  dt = dt.replace(tzinfo=timezone.utc)
+              jst = dt.astimezone(timezone(timedelta(hours=9)))
+              return jst.strftime('%Y-%m-%d %H:%M:%S JST')
+
+          esc = html.escape
+          summary = ["### 追加されたエントリ\n", "<table>"]
+          summary.append(f"<tr>\n<th>Date</th><td>{esc(to_jst(dt))}</td>\n</tr>")
+          summary.append(f"<tr>\n<th>Score</th>\n<td>{esc(str(input_score))}</td>\n</tr>")
+          if input_note:
+              summary.append(f"<tr>\n<th>Note</th>\n<td>{esc(input_note)}</td>\n</tr>")
+          summary.append("</table>\n")
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
+              f.write('\n'.join(summary))
         env:
           INPUT_DATE: ${{ env.INPUT_DATE }}
           INPUT_SCORE: ${{ env.INPUT_SCORE }}
