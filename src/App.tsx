@@ -5,6 +5,7 @@ import { useMonthSummary } from './hooks/useMonthSummary';
 import { useMonthList } from './hooks/useMonthList';
 import { CurrentPng, type CurrentPngProps } from 'recharts-to-png';
 import FileSaver from 'file-saver';
+import { Timeline } from './components/Timeline';
 
 function getCurrentMonth() {
   const now = new Date();
@@ -24,6 +25,7 @@ const App: React.FC = () => {
   return (
     <div style={{ width: '100vw', margin: 0, padding: 0 }}>
       <h1 style={{ textAlign: 'center' }}>Mood Visualizer</h1>
+      {/* まずグラフUI */}
       {monthsLoading && <p>月リスト取得中...</p>}
       {monthsError && <p style={{ color: 'red' }}>{monthsError}</p>}
       {!monthsLoading && !monthsError && (
@@ -92,6 +94,18 @@ const App: React.FC = () => {
           )}
         </CurrentPng>
       )}
+      {/* タイムラインを下に移動。グラフのsummaryを渡す */}
+      <div style={{ maxWidth: 600, margin: '0 auto', marginBottom: 40 }}>
+        {!loading && !error && summary.length > 0 && (
+          <Timeline
+            entries={summary.map(day => ({
+              date: day.date,
+              score: day.close,
+              note: day.notes && day.notes.length > 0 ? day.notes[0] : undefined,
+            }))}
+          />
+        )}
+      </div>
     </div>
   );
 };
