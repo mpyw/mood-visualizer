@@ -47,46 +47,69 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Parse Inputs
+      - name: Parse and Record Inputs
         run: |
-          # ISO 8601（タイムゾーン付き）バリデーション関数
-          is_valid_iso8601() {
-            echo "$1" | grep -Eq '^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?([+-][0-9]{2}:[0-9]{2}|Z))$'
-          }
+          import os, sys, json
+          from datetime import datetime, timezone, timedelta
+          from pathlib import Path
 
-          # dateバリデーション: 未入力なら現在時刻, 不正ならエラーで終了
-          if [[ -z "$INPUT_DATE" ]]; then
-            INPUT_DATE="$(TZ=Asia/Tokyo date +"%Y-%m-%dT%H:%M:%S%:z")"
-            echo "INPUT_DATE=$INPUT_DATE" >> "$GITHUB_ENV"
-          elif ! is_valid_iso8601 "$INPUT_DATE"; then
-            echo "[ERROR] date は ISO 8601 形式（タイムゾーン付き）で入力してください: $INPUT_DATE" >&2
-            exit 1
-          fi
-          
+          # 入力値取得
+          input_date = os.environ.get('INPUT_DATE')
+          input_score = os.environ.get('INPUT_SCORE')
+          input_note = os.environ.get('INPUT_NOTE')
+          list_file = os.environ.get('LIST_FILE')
+
+          # 日付パース: 未入力なら現在時刻（JST)，厳格にISO 8601チェック
+          if not input_date:
+              now = datetime.now(timezone(timedelta(hours=9)))
+              input_date = now.isoformat()
+          try:
+              dt = datetime.fromisoformat(input_date)
+          except Exception:
+              print(f'[ERROR] date は ISO 8601 形式で入力してください: {input_date}', file=sys.stderr)
+              sys.exit(1)
+
           # 年月日を切り出す
-          INPUT_YEARMONTH="$(echo "$INPUT_DATE" | cut -c1-4)-$(echo "$INPUT_DATE" | cut -c6-7)"
-          HISTORY_FILE="public/data/history/$INPUT_YEARMONTH.jsonl"
-          echo "INPUT_YEARMONTH=$INPUT_YEARMONTH" >> "$GITHUB_ENV"
-          echo "HISTORY_FILE=$HISTORY_FILE" >> "$GITHUB_ENV"
+          input_yearmonth = input_date[:4] + '-' + input_date[5:7]
+          history_file = f'public/data/history/{input_yearmonth}.jsonl'
 
-      - name: Update ${{ env.LIST_FILE }}
-        run: |
-          mkdir -p public/data
-          touch "$LIST_FILE"
-          if ! grep -q '"date":\s*"'$INPUT_YEARMONTH'"' "$LIST_FILE"; then
-            echo '{"date": "'$INPUT_YEARMONTH'"}' >> "$LIST_FILE"
-          fi
+          # LIST_FILE の更新
+          Path('public/data').mkdir(parents=True, exist_ok=True)
+          Path(list_file).touch(exist_ok=True)
+          found = False
+          with open(list_file, encoding='utf-8') as f:
+              for line in f:
+                  try:
+                      obj = json.loads(line)
+                      if obj.get('date') == input_yearmonth:
+                          found = True
+                          break
+                  except Exception:
+                      continue
+          if not found:
+              with open(list_file, 'a', encoding='utf-8') as f:
+                  f.write(json.dumps({'date': input_yearmonth}, ensure_ascii=False, separators=(',', ':')) + '\n')
 
-      - name: Update ${{ env.HISTORY_FILE }}
-        run: |
-          mkdir -p public/data/history
-          if [[ -n "$INPUT_NOTE" ]]; then
-            echo "{\"date\":\"$INPUT_DATE\",\"score\":$INPUT_SCORE,\"note\":\"$INPUT_NOTE\"}" >> "$HISTORY_FILE"
-          else
-            echo "{\"date\":\"$INPUT_DATE\",\"score\":$INPUT_SCORE}" >> "$HISTORY_FILE"
-          fi
+          # HISTORY_FILE の更新
+          Path('public/data/history').mkdir(parents=True, exist_ok=True)
+          data = {'date': input_date, 'score': int(input_score)}
+          if input_note:
+              data['note'] = input_note
+          with open(history_file, 'a', encoding='utf-8') as f:
+              f.write(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n')
 
-      - name: Amend commit and push changes
+          # GITHUB_ENV への出力（他stepで必要なら）
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
+              f.write(f'INPUT_YEARMONTH={input_yearmonth}\n')
+              f.write(f'HISTORY_FILE={history_file}\n')
+        env:
+          INPUT_DATE: ${{ env.INPUT_DATE }}
+          INPUT_SCORE: ${{ env.INPUT_SCORE }}
+          INPUT_NOTE: ${{ env.INPUT_NOTE }}
+          LIST_FILE: ${{ env.LIST_FILE }}
+        shell: python
+
+      - name: Amend Commit and Push Changes
         uses: ryancyq/github-signed-commit@v1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

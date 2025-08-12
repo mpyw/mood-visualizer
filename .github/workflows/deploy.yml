@@ -8,6 +8,11 @@ on:
         type: string
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   deploy:
     name: Deploy to GitHub Pages
@@ -23,7 +28,7 @@ jobs:
         with:
           node-version: 24
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: npm ci
 
       - name: Build
@@ -32,7 +37,7 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v4
 
-      - name: Upload artifact
+      - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
