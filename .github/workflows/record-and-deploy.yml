@@ -1,0 +1,130 @@
+name: Record and Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      score:
+        description: '気分のスコア (0-10)'
+        required: true
+        type: choice
+        options:
+          - '0'
+          - '1'
+          - '2'
+          - '3'
+          - '4'
+          - '5'
+          - '6'
+          - '7'
+          - '8'
+          - '9'
+          - '10'
+      note:
+        description: '任意のメモ'
+        required: false
+        type: string
+      date:
+        description: '記録日時 (YYYY-MM-DDTHH:MM:SS+09:00形式, 未入力なら現在時刻)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+env:
+  INPUT_DATE: ${{ github.event.inputs.date }}
+  INPUT_SCORE: ${{ github.event.inputs.score }}
+  INPUT_NOTE: ${{ github.event.inputs.note }}
+  LIST_FILE: public/data/history-list.jsonl
+
+jobs:
+  record:
+    name: Record Mood History
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Parse Inputs
+        run: |
+          # ISO 8601（タイムゾーン付き）バリデーション関数
+          is_valid_iso8601() {
+            echo "$1" | grep -Eq '^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?([+-][0-9]{2}:[0-9]{2}|Z))$'
+          }
+
+          # dateバリデーション: 未入力なら現在時刻, 不正ならエラーで終了
+          if [[ -z "$INPUT_DATE" ]]; then
+            INPUT_DATE="$(TZ=Asia/Tokyo date +"%Y-%m-%dT%H:%M:%S%:z")"
+            echo "INPUT_DATE=$INPUT_DATE" >> "$GITHUB_ENV"
+          elif ! is_valid_iso8601 "$INPUT_DATE"; then
+            echo "[ERROR] date は ISO 8601 形式（タイムゾーン付き）で入力してください: $INPUT_DATE" >&2
+            exit 1
+          fi
+          
+          # 年月日を切り出す
+          INPUT_YEARMONTH="$(echo "$INPUT_DATE" | cut -c1-4)-$(echo "$INPUT_DATE" | cut -c6-7)"
+          HISTORY_FILE="public/data/history/$INPUT_YEARMONTH.jsonl"
+          echo "INPUT_YEARMONTH=$INPUT_YEARMONTH" >> "$GITHUB_ENV"
+          echo "HISTORY_FILE=$HISTORY_FILE" >> "$GITHUB_ENV"
+
+      - name: Update ${{ env.LIST_FILE }}
+        run: |
+          mkdir -p public/data
+          touch "$LIST_FILE"
+          if ! grep -q '"date":\s*"'$INPUT_YEARMONTH'"' "$LIST_FILE"; then
+            echo '{"date": "'$INPUT_YEARMONTH'"}' >> "$LIST_FILE"
+          fi
+
+      - name: Update ${{ env.HISTORY_FILE }}
+        run: |
+          mkdir -p public/data/history
+          if [[ -n "$INPUT_NOTE" ]]; then
+            echo "{\"date\":\"$INPUT_DATE\",\"score\":$INPUT_SCORE,\"note\":\"$INPUT_NOTE\"}" >> "$HISTORY_FILE"
+          else
+            echo "{\"date\":\"$INPUT_DATE\",\"score\":$INPUT_SCORE}" >> "$HISTORY_FILE"
+          fi
+
+      - name: Amend commit and push changes
+        uses: ryancyq/github-signed-commit@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            public/data/history-list.jsonl
+            public/data/history/*.jsonl
+          commit-message: |
+            ${{ github.event.inputs.date }} / Score [${{ github.event.inputs.score }}]
+
+            ${{ github.event.inputs.note }}
+
+  deploy:
+    needs: record
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build:ci
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
