@@ -20,7 +20,7 @@ const App: React.FC = () => {
   const { months, loading: monthsLoading, error: monthsError } = useMonthList();
 
   // データ取得はカスタムフックに委譲
-  const { summary, loading, error } = useMonthSummary(selectedMonth, includeAdjacent, months);
+  const { summary, records, loading, error } = useMonthSummary(selectedMonth, includeAdjacent, months);
 
   return (
     <div style={{ width: '100vw', margin: 0, padding: 0 }}>
@@ -96,12 +96,12 @@ const App: React.FC = () => {
       )}
       {/* タイムラインを下に移動。グラフのsummaryを渡す */}
       <div style={{ maxWidth: 600, margin: '0 auto', marginBottom: 40 }}>
-        {!loading && !error && summary.length > 0 && (
+        {!loading && !error && records.length > 0 && (
           <Timeline
-            entries={summary.map(day => ({
-              date: day.date,
-              score: day.close,
-              note: day.notes && day.notes.length > 0 ? day.notes[0] : undefined,
+            entries={records.map(r => ({
+              date: r.date,
+              score: r.score,
+              note: r.note,
             }))}
           />
         )}
