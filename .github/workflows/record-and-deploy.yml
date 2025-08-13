@@ -32,6 +32,10 @@ on:
         description: '記録日時 (YYYY-MM-DDTHH:MM:SS+09:00形式, 未入力なら現在時刻)'
         required: false
         type: string
+      verify_nda:
+        description: 'この投稿には NDA に抵触する内容が含まれていないことを確認しました。'
+        required: true
+        type: boolean
 
 permissions:
   contents: write
@@ -42,6 +46,7 @@ env:
   INPUT_DATE: ${{ github.event.inputs.date }}
   INPUT_SCORE: ${{ github.event.inputs.score }}
   INPUT_NOTE: ${{ github.event.inputs.note }}
+  INPUT_VERIFY_NDA: ${{ github.event.inputs.verify_nda }}
   LIST_FILE: public/data/history-list.jsonl
 
 jobs:
@@ -51,6 +56,12 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Verify NDA
+        if: ${{ !github.event.inputs.verify_nda }}
+        run: |
+          echo "NDA verification is required. Please check the box in the workflow dispatch inputs."
+          exit 1
 
       - name: Parse and Record Inputs
         id: record
