@@ -140,19 +140,21 @@ export const Timeline = React.memo(
               </span>
             </label>
           </div>
-          {pagedEntries.map((entry, i) => (
-            <div
-              key={entry.date + '-' + i}
-              ref={(el) => {
-                const dateKey = entry.date.slice(0, 10)
-                if (el && !dateRefs.current[dateKey]) {
-                  dateRefs.current[dateKey] = el
-                }
-              }}
-            >
-              <TimelineCard entry={entry} />
-            </div>
-          ))}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            {pagedEntries.map((entry, i) => (
+              <div
+                key={entry.date + '-' + i}
+                ref={(el) => {
+                  const dateKey = entry.date.slice(0, 10)
+                  if (el && !dateRefs.current[dateKey]) {
+                    dateRefs.current[dateKey] = el
+                  }
+                }}
+              >
+                <TimelineCard entry={entry} />
+              </div>
+            ))}
+          </div>
           <div ref={loader} />
           {!hasMore && pagedEntries.length > 0 && (
             <p style={{ textAlign: 'center', color: '#aaa' }}>

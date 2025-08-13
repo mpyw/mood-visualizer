@@ -153,7 +153,7 @@ const MoodChart: React.FC<MoodChartProps> = ({
               fill="#222"
               style={{ pointerEvents: 'none', userSelect: 'none' }}
             >
-              {month} の気分グラフ
+              Mood Chart of {month}
             </text>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis
@@ -209,6 +209,7 @@ const MoodChart: React.FC<MoodChartProps> = ({
               dot={renderCustomDot}
               activeDot={false}
               name="Avg"
+              isAnimationActive={false}
             />
           </ComposedChart>
         </ResponsiveContainer>

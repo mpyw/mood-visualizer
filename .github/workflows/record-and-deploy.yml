@@ -116,12 +116,56 @@ jobs:
           summary.append("</table>\n")
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
               f.write('\n'.join(summary))
+
+          # GITHUB_ENV へ補完済みinput_dateを書き出し
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
+              f.write(f'INPUT_DATE={input_date}\n')
         env:
           INPUT_DATE: ${{ env.INPUT_DATE }}
           INPUT_SCORE: ${{ env.INPUT_SCORE }}
           INPUT_NOTE: ${{ env.INPUT_NOTE }}
           LIST_FILE: ${{ env.LIST_FILE }}
         shell: python
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Dependencies (Node.js)
+        run: |
+          npm ci --include=dev
+
+      - name: Build and Preview (Vite)
+        run: |
+          npm run build:dev
+          npm run preview &
+          sleep 5
+
+      - name: Export PNG via Puppeteer
+        run: |
+          npx ts-node scripts/export_png.mts
+        env:
+          EXPORT_PNG_URL: http://localhost:4173
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          pip install requests
+
+      - name: Notify Slack (with PNG if first of the day)
+        env:
+          INPUT_DATE: ${{ env.INPUT_DATE }}
+          INPUT_SCORE: ${{ env.INPUT_SCORE }}
+          INPUT_NOTE: ${{ env.INPUT_NOTE }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          SLACK_USER_TOKEN: ${{ secrets.SLACK_USER_TOKEN }}
+        run: |
+          python scripts/notify_slack.py
 
       - name: Amend Commit and Push Changes
         uses: ryancyq/github-signed-commit@v1
@@ -131,6 +175,7 @@ jobs:
           files: |
             public/data/history-list.jsonl
             public/data/history/*.jsonl
+            public/data/latest-slack-update.json
           commit-message: |
             ${{ github.event.inputs.date }} / Score [${{ github.event.inputs.score }}]
 

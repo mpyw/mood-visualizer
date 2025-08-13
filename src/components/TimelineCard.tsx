@@ -18,7 +18,7 @@ export const TimelineCard: React.FC<{ entry: TimelineEntry }> = React.memo(
         style={{
           display: 'flex',
           flexDirection: 'row',
-          alignItems: 'flex-start',
+          alignItems: 'center',
           gap: 16,
           background: '#fff',
           borderRadius: 16,
@@ -27,7 +27,7 @@ export const TimelineCard: React.FC<{ entry: TimelineEntry }> = React.memo(
           margin: '0 0 18px 0',
           minHeight: entry.note ? 120 : 60,
           maxWidth: 520,
-          width: '100%',
+          width: 520,
         }}
       >
         <img
