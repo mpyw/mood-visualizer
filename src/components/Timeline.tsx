@@ -31,21 +31,39 @@ export const Timeline: React.FC<{ entries: TimelineEntry[] }> = ({ entries }) =>
 
   return (
     <div style={{ maxWidth: 560, margin: '0 auto', padding: '32px 0' }}>
-      <h2 style={{ textAlign: 'center', marginBottom: 24 }}>Mood Timeline</h2>
-      <label style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        background: '#f3f6fd', borderRadius: 8, padding: '6px 16px',
-        boxShadow: '0 1px 4px #0001', fontSize: 15, cursor: 'pointer',
+      <div style={{
+        position: 'sticky',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 2,
+        background: '#e4e6ea',
+        width: '100vw',
+        minWidth: '100%',
+        borderRadius: 0,
+        marginLeft: 'calc(50% - 50vw)',
+        marginRight: 'calc(50% - 50vw)',
         marginBottom: 18,
+        paddingTop: 4,
+        paddingBottom: 16,
+        display: 'block',
       }}>
-        <input
-          type="checkbox"
-          checked={showOnlyWithNote}
-          onChange={e => { setShowOnlyWithNote(e.target.checked); setPage(1); }}
-          style={{ accentColor: '#646cff', width: 18, height: 18, marginRight: 4 }}
-        />
-        <span style={{ userSelect: 'none', color: '#333' }}>Note 付きのみ</span>
-      </label>
+        <h2 style={{ textAlign: 'center', marginBottom: 12, marginTop: 0 }}>Mood Timeline</h2>
+        <label style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          justifyContent: 'center', padding: '4px 10px', boxShadow: 'none',
+          fontSize: 15, cursor: 'pointer', marginBottom: 0,
+          background: 'none',
+        }}>
+          <input
+            type="checkbox"
+            checked={showOnlyWithNote}
+            onChange={e => { setShowOnlyWithNote(e.target.checked); setPage(1); }}
+            style={{ accentColor: '#646cff', width: 18, height: 18, marginRight: 4 }}
+          />
+          <span style={{ userSelect: 'none', color: '#666' }}>Note 付きのみ</span>
+        </label>
+      </div>
       {pagedEntries.map((entry, i) => (
         <TimelineCard key={entry.date + '-' + i} entry={entry} />
       ))}

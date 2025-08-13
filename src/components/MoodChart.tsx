@@ -94,14 +94,12 @@ const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef }) => {
   return (
     <div
       style={{
-        width: '98vw',
-        maxWidth: 1600,
+        width: '100%',
         minWidth: 320,
-        margin: '0 auto',
-        background: '#fff',
-        borderRadius: 16,
-        boxShadow: '0 2px 16px #0001',
-        padding: '2rem 1rem 2.5rem 1rem',
+        background: 'none', // 枠・背景を消す
+        borderRadius: 0,
+        boxShadow: 'none',
+        padding: 0,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -110,7 +108,7 @@ const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef }) => {
       }}
     >
       <div style={{ position: 'relative', width: '100%', height: 540 }}>
-        <ResponsiveContainer width="98%" height={540}>
+        <ResponsiveContainer width="100%" height={540}>
           <ComposedChart data={chartData} margin={{ top: 56, right: 40, left: 20, bottom: 32 }} ref={chartRef}>
             {/* グラフ内タイトル（PNGにも含まれる） */}
             <text
