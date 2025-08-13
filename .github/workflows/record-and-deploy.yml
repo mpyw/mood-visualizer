@@ -19,6 +19,11 @@ on:
           - '8'
           - '9'
           - '10'
+      reply_broadcast:
+        description: '2回目以降の投稿でスレッド外にも通知するか'
+        required: false
+        type: boolean
+        default: true
       note:
         description: '任意のメモ'
         required: false
@@ -60,6 +65,17 @@ jobs:
           input_score = os.environ.get('INPUT_SCORE')
           input_note = os.environ.get('INPUT_NOTE')
           list_file = os.environ.get('LIST_FILE')
+          reply_broadcast = os.environ.get('REPLY_BROADCAST')
+
+          # REPLY_BROADCAST: true/false → 1/0
+          if reply_broadcast is not None:
+              if reply_broadcast.lower() == 'true':
+                  reply_broadcast = '1'
+              else:
+                  reply_broadcast = '0'
+              # GITHUB_ENV へ書き出し
+              with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
+                  f.write(f'REPLY_BROADCAST={reply_broadcast}\n')
 
           # 日付パース: 未入力なら現在時刻（JST)，厳格にISO 8601チェック
           if not input_date:
@@ -125,6 +141,7 @@ jobs:
           INPUT_SCORE: ${{ env.INPUT_SCORE }}
           INPUT_NOTE: ${{ env.INPUT_NOTE }}
           LIST_FILE: ${{ env.LIST_FILE }}
+          REPLY_BROADCAST: ${{ github.event.inputs.reply_broadcast }}
         shell: python
 
       - name: Set up Node.js
@@ -164,6 +181,7 @@ jobs:
           INPUT_NOTE: ${{ env.INPUT_NOTE }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           SLACK_USER_TOKEN: ${{ secrets.SLACK_USER_TOKEN }}
+          REPLY_BROADCAST: ${{ env.REPLY_BROADCAST }}
         run: |
           python scripts/notify_slack.py
 
