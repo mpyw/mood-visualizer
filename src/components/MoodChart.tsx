@@ -7,6 +7,7 @@ export type MoodChartProps = {
   data: MoodDaySummary[];
   month: string; // 'YYYY-MM'
   chartRef?: React.RefObject<SVGSVGElement>;
+  onDotClick?: (date: string) => void; // 追加
 };
 
 // Recharts用データ整形
@@ -17,7 +18,7 @@ type ChartRow = {
   high: number;
 };
 
-const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef }) => {
+const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef, onDotClick }) => {
   // Recharts用データ配列
   const chartData: ChartRow[] = data.map(d => ({
     date: d.date,
@@ -58,9 +59,13 @@ const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef }) => {
   const renderCustomDot = (props: { cx: number; cy: number; payload: ChartRow }) => {
     const { cx, cy, payload } = props;
     const isToday = payload.date === today;
+    const handleClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (onDotClick) onDotClick(payload.date);
+    };
     if (isToday) {
       return (
-        <g>
+        <g onClick={handleClick} style={{ cursor: 'pointer' }}>
           <circle
             cx={cx}
             cy={cy}
@@ -87,6 +92,8 @@ const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef }) => {
         cy={cy}
         r={4}
         fill="mediumseagreen"
+        onClick={handleClick}
+        style={{ cursor: 'pointer' }}
       />
     );
   };
@@ -170,7 +177,15 @@ const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef }) => {
               isAnimationActive={false}
             />
             <ErrorBar dataKey="error" width={8} stroke="gray" direction="y" />
-            <Line type="monotone" dataKey="avg" stroke="mediumseagreen" strokeWidth={3} dot={renderCustomDot} name="Avg" />
+            <Line
+              type="monotone"
+              dataKey="avg"
+              stroke="mediumseagreen"
+              strokeWidth={3}
+              dot={renderCustomDot}
+              activeDot={false}
+              name="Avg"
+            />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

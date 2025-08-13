@@ -5,7 +5,7 @@ import { useMonthSummary } from './hooks/useMonthSummary';
 import { useMonthList } from './hooks/useMonthList';
 import { CurrentPng, type CurrentPngProps } from 'recharts-to-png';
 import FileSaver from 'file-saver';
-import { Timeline } from './components/Timeline';
+import { Timeline, type TimelineHandle } from './components/Timeline';
 
 function getCurrentMonth() {
   const now = new Date();
@@ -15,12 +15,45 @@ function getCurrentMonth() {
 const App: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonth());
   const [includeAdjacent, setIncludeAdjacent] = useState(true);
+  const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
+
+  const timelineRef = React.useRef<TimelineHandle>(null);
 
   // 月リスト取得をフック化
   const { months, loading: monthsLoading, error: monthsError } = useMonthList();
 
   // データ取得はカスタムフックに委譲
-  const { summary, records, loading, error } = useMonthSummary(selectedMonth, includeAdjacent, months);
+  const { summary, records, loading, error, tryFetchRecordByDate } = useMonthSummary(selectedMonth, includeAdjacent, months);
+
+  // 日付クリック時の投稿遷移ロジック
+  const handleDotClick = async (date: string) => {
+    console.log('[handleDotClick] called with date:', date);
+    const found = records.filter(r => r.date.startsWith(date));
+    console.log('[handleDotClick] found in records:', found);
+    if (found.length > 0) {
+      if (timelineRef.current) {
+        console.log('[handleDotClick] calling scrollToDate:', date);
+        timelineRef.current.scrollToDate(date);
+      }
+      return;
+    }
+    if (typeof tryFetchRecordByDate === 'function' && found.length === 0) {
+      const fetched = await tryFetchRecordByDate(date);
+      console.log('[handleDotClick] fetched from tryFetchRecordByDate:', fetched);
+      if (fetched) {
+        setPendingScrollDate(date);
+      }
+    }
+  };
+
+  // records更新時にpendingScrollDateがあればスクロール
+  React.useEffect(() => {
+    if (pendingScrollDate && timelineRef.current) {
+      console.log('[useEffect] scrolling to', pendingScrollDate);
+      timelineRef.current.scrollToDate(pendingScrollDate);
+      setPendingScrollDate(null);
+    }
+  }, [records, pendingScrollDate]);
 
   return (
     <div
@@ -179,6 +212,7 @@ const App: React.FC = () => {
                       data={summary}
                       month={selectedMonth}
                       chartRef={chartRef}
+                      onDotClick={handleDotClick}
                     />
                   )}
                   {!loading && !error && summary.length === 0 && <p>データがありません</p>}
@@ -194,6 +228,7 @@ const App: React.FC = () => {
       <div style={{ maxWidth: 700, margin: '32px auto 40px auto' }}>
         {!loading && !error && records.length > 0 && (
           <Timeline
+            ref={timelineRef}
             entries={records.map(r => ({
               date: r.date,
               score: r.score,

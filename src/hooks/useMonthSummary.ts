@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { parseJsonl, groupByDate, type MoodRecord, type MoodDaySummary } from '../utils/parseJsonl';
 
 const BASE_PATH = import.meta.env.VITE_BASE_PATH || '';
@@ -9,6 +9,34 @@ export function useMonthSummary(selectedMonth: string, includeAdjacent: boolean,
   const [records, setRecords] = useState<MoodRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 任意の月を仮取得し、該当日付の投稿があればrecordsに確定追加して返す（なければロールバック）
+  const tryFetchRecordByDate = useCallback(async (date: string): Promise<null | MoodRecord> => {
+    const month = date.slice(0, 7); // YYYY-MM
+    if (!months.includes(month)) return null;
+    try {
+      const res = await fetch(`${MOOD_HISTORY_PATH}${month}.jsonl`);
+      if (!res.ok) return null;
+      const text = await res.text();
+      const fetchedRecords = parseJsonl(text);
+      // 日付が一致する投稿を新しい順で探す（時刻付き対応）
+      const found = fetchedRecords.filter(r => r.date.startsWith(date));
+      if (found.length > 0) {
+        // 既存recordsにこの月のデータがなければマージして確定 → 既存にない投稿は常にマージ
+        setRecords(prevRecords => {
+          // 重複を除いてマージ
+          const merged = [...prevRecords, ...fetchedRecords.filter(fr => !prevRecords.some(r => r.date === fr.date && r.score === fr.score && r.note === fr.note))];
+          // 日付降順で全投稿をソート
+          merged.sort((a, b) => (a.date < b.date ? 1 : -1));
+          return merged;
+        });
+        return found[0]; // 一番新しい投稿
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, [months, setRecords]);
 
   useEffect(() => {
     if (!selectedMonth) return;
@@ -70,6 +98,6 @@ export function useMonthSummary(selectedMonth: string, includeAdjacent: boolean,
     })();
   }, [selectedMonth, includeAdjacent, months]);
 
-  return { summary, records, loading, error };
+  return { summary, records, loading, error, tryFetchRecordByDate };
 }
 
