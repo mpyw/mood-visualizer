@@ -1,15 +1,19 @@
-import React from 'react';
+import React from 'react'
 
 type MonthSelectorProps = {
-  months: string[]; // 'YYYY-MM' 形式
-  value: string;
-  onChange: (month: string) => void;
-};
+  months: string[]
+  value: string
+  onChange: (month: string) => void
+}
 
-const MonthSelector: React.FC<MonthSelectorProps> = ({ months, value, onChange }) => (
+const MonthSelector: React.FC<MonthSelectorProps> = ({
+  months,
+  value,
+  onChange,
+}) => (
   <select
     value={value}
-    onChange={e => onChange(e.target.value)}
+    onChange={(e) => onChange(e.target.value)}
     style={{
       fontSize: 16,
       padding: '8px 18px 8px 10px',
@@ -25,11 +29,12 @@ const MonthSelector: React.FC<MonthSelectorProps> = ({ months, value, onChange }
       minWidth: 120,
     }}
   >
-    {months.map(month => (
-      <option key={month} value={month}>{month}</option>
+    {months.map((month) => (
+      <option key={month} value={month}>
+        {month}
+      </option>
     ))}
   </select>
-);
+)
 
-export default MonthSelector;
-
+export default React.memo(MonthSelector)

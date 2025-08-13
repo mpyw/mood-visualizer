@@ -1,59 +1,60 @@
-import React, { useState } from 'react';
-import MonthSelector from './components/MonthSelector';
-import MoodChart from './components/MoodChart';
-import { useMonthSummary } from './hooks/useMonthSummary';
-import { useMonthList } from './hooks/useMonthList';
-import { CurrentPng, type CurrentPngProps } from 'recharts-to-png';
-import FileSaver from 'file-saver';
-import { Timeline, type TimelineHandle } from './components/Timeline';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import MonthSelector from './components/MonthSelector'
+import MoodChart from './components/MoodChart'
+import { useMonthSummary } from './hooks/useMonthSummary'
+import { useMonthList } from './hooks/useMonthList'
+import { CurrentPng, type CurrentPngProps } from 'recharts-to-png'
+import FileSaver from 'file-saver'
+import { Timeline, type TimelineHandle } from './components/Timeline'
 
 function getCurrentMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
 const App: React.FC = () => {
-  const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonth());
-  const [includeAdjacent, setIncludeAdjacent] = useState(true);
-  const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth())
+  const [includeAdjacent, setIncludeAdjacent] = useState(true)
+  const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(
+    null
+  )
+  const timelineRef = useRef<TimelineHandle>(null)
 
-  const timelineRef = React.useRef<TimelineHandle>(null);
+  const { months, loading: monthsLoading, error: monthsError } = useMonthList()
+  const { summary, records, loading, error, tryFetchRecordByDate } =
+    useMonthSummary(selectedMonth, includeAdjacent, months)
 
-  // 月リスト取得をフック化
-  const { months, loading: monthsLoading, error: monthsError } = useMonthList();
+  const entries = useMemo(
+    () =>
+      records.map((r) => ({
+        date: r.date,
+        score: r.score,
+        note: r.note,
+      })),
+    [records]
+  )
 
-  // データ取得はカスタムフックに委譲
-  const { summary, records, loading, error, tryFetchRecordByDate } = useMonthSummary(selectedMonth, includeAdjacent, months);
-
-  // 日付クリック時の投稿遷移ロジック
-  const handleDotClick = async (date: string) => {
-    console.log('[handleDotClick] called with date:', date);
-    const found = records.filter(r => r.date.startsWith(date));
-    console.log('[handleDotClick] found in records:', found);
-    if (found.length > 0) {
-      if (timelineRef.current) {
-        console.log('[handleDotClick] calling scrollToDate:', date);
-        timelineRef.current.scrollToDate(date);
+  const handleDotClick = useCallback(
+    async (date: string) => {
+      const found = records.filter((r) => r.date.startsWith(date))
+      if (found.length > 0) {
+        timelineRef.current?.scrollToDate(date)
+        return
       }
-      return;
-    }
-    if (typeof tryFetchRecordByDate === 'function' && found.length === 0) {
-      const fetched = await tryFetchRecordByDate(date);
-      console.log('[handleDotClick] fetched from tryFetchRecordByDate:', fetched);
-      if (fetched) {
-        setPendingScrollDate(date);
+      if (typeof tryFetchRecordByDate === 'function' && found.length === 0) {
+        const fetched = await tryFetchRecordByDate(date)
+        if (fetched) setPendingScrollDate(date)
       }
-    }
-  };
+    },
+    [records, tryFetchRecordByDate]
+  )
 
-  // records更新時にpendingScrollDateがあればスクロール
-  React.useEffect(() => {
+  useEffect(() => {
     if (pendingScrollDate && timelineRef.current) {
-      console.log('[useEffect] scrolling to', pendingScrollDate);
-      timelineRef.current.scrollToDate(pendingScrollDate);
-      setPendingScrollDate(null);
+      timelineRef.current.scrollToDate(pendingScrollDate)
+      setPendingScrollDate(null)
     }
-  }, [records, pendingScrollDate]);
+  }, [records, pendingScrollDate])
 
   return (
     <div
@@ -67,67 +68,114 @@ const App: React.FC = () => {
     >
       <header
         style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center',
-          gap: 8, marginBottom: 8, marginTop: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: 8,
+          marginTop: 0,
           padding: '32px 0 8px 0',
         }}
       >
         <h1
           style={{
-            textAlign: 'center', margin: 0, fontWeight: 700, fontSize: 32,
-            letterSpacing: 1, color: '#3b3b4f',
+            textAlign: 'center',
+            margin: 0,
+            fontWeight: 700,
+            fontSize: 32,
+            letterSpacing: 1,
+            color: '#3b3b4f',
             textShadow: '0 2px 8px #0001',
           }}
         >
           Mood Visualizer
         </h1>
       </header>
-      {monthsLoading && <p style={{ textAlign: 'center' }}>月リスト取得中...</p>}
-      {monthsError && <p style={{ color: 'red', textAlign: 'center' }}>{monthsError}</p>}
+      {monthsLoading && (
+        <p style={{ textAlign: 'center' }}>月リスト取得中...</p>
+      )}
+      {monthsError && (
+        <p style={{ color: 'red', textAlign: 'center' }}>{monthsError}</p>
+      )}
       {!monthsLoading && !monthsError && (
         <CurrentPng>
           {({ getPng, chartRef, isLoading }: CurrentPngProps) => (
             <>
               <div
                 style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18,
-                  margin: '0 0 24px 0', width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 18,
+                  margin: '0 0 24px 0',
+                  width: '100%',
                 }}
               >
-                {/* 上部パネル: 月選択・チェックボックス */}
                 <div
                   style={{
-                    display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 16,
-                    background: 'rgba(243,246,253,0.92)', border: '1.5px solid #e0e7ef',
-                    borderRadius: 14, boxShadow: '0 2px 12px #0001', padding: '18px 28px',
-                    marginBottom: 8, minWidth: 320, maxWidth: 520,
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 16,
+                    background: 'rgba(243,246,253,0.92)',
+                    border: '1.5px solid #e0e7ef',
+                    borderRadius: 14,
+                    boxShadow: '0 2px 12px #0001',
+                    padding: '18px 28px',
+                    marginBottom: 8,
+                    minWidth: 320,
+                    maxWidth: 520,
                   }}
                 >
-                  <MonthSelector months={months} value={selectedMonth} onChange={setSelectedMonth} />
+                  <MonthSelector
+                    months={months}
+                    value={selectedMonth}
+                    onChange={setSelectedMonth}
+                  />
                   <label
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      fontSize: 15, cursor: 'pointer', color: '#333',
-                      background: 'none', borderRadius: 8, padding: 0, boxShadow: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: 15,
+                      cursor: 'pointer',
+                      color: '#333',
+                      background: 'none',
+                      borderRadius: 8,
+                      padding: 0,
+                      boxShadow: 'none',
                       margin: 0,
                     }}
                   >
                     <input
                       type="checkbox"
                       checked={includeAdjacent}
-                      onChange={e => setIncludeAdjacent(e.target.checked)}
-                      style={{ accentColor: '#646cff', width: 18, height: 18, marginRight: 4 }}
+                      onChange={(e) => setIncludeAdjacent(e.target.checked)}
+                      style={{
+                        accentColor: '#646cff',
+                        width: 18,
+                        height: 18,
+                        marginRight: 4,
+                      }}
                     />
-                    <span style={{ userSelect: 'none' }}>前後月も含めて30件表示</span>
+                    <span style={{ userSelect: 'none' }}>
+                      前後月も含めて30件表示
+                    </span>
                   </label>
                 </div>
-                {/* 下部パネル: 記録をつける・PNGで保存 */}
                 <div
                   style={{
-                    display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 16,
-                    justifyContent: 'space-around', // ← 追加
-                    background: 'none', border: 'none', boxShadow: 'none',
-                    padding: 0, minWidth: 320, maxWidth: 520,
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 16,
+                    justifyContent: 'space-around',
+                    background: 'none',
+                    border: 'none',
+                    boxShadow: 'none',
+                    padding: 0,
+                    minWidth: 320,
+                    maxWidth: 520,
                   }}
                 >
                   <a
@@ -136,7 +184,8 @@ const App: React.FC = () => {
                     rel="noopener noreferrer"
                     style={{
                       display: 'inline-block',
-                      background: 'linear-gradient(90deg, #646cff 0%, #3b82f6 100%)',
+                      background:
+                        'linear-gradient(90deg, #646cff 0%, #3b82f6 100%)',
                       color: '#fff',
                       padding: '0.5em 1.5em',
                       borderRadius: 22,
@@ -161,7 +210,8 @@ const App: React.FC = () => {
                   <button
                     style={{
                       display: 'inline-block',
-                      background: 'linear-gradient(90deg, #646cff 0%, #3b82f6 100%)',
+                      background:
+                        'linear-gradient(90deg, #646cff 0%, #3b82f6 100%)',
                       color: '#fff',
                       padding: '0.5em 1.5em',
                       borderRadius: 22,
@@ -180,9 +230,9 @@ const App: React.FC = () => {
                     }}
                     disabled={isLoading}
                     onClick={async () => {
-                      const png = await getPng();
+                      const png = await getPng()
                       if (png) {
-                        FileSaver.saveAs(png, `${selectedMonth}_mood_chart.png`);
+                        FileSaver.saveAs(png, `${selectedMonth}_mood_chart.png`)
                       }
                     }}
                   >
@@ -190,7 +240,6 @@ const App: React.FC = () => {
                   </button>
                 </div>
               </div>
-              {/* グラフ本体 */}
               <div
                 style={{
                   width: '100%',
@@ -215,7 +264,9 @@ const App: React.FC = () => {
                       onDotClick={handleDotClick}
                     />
                   )}
-                  {!loading && !error && summary.length === 0 && <p>データがありません</p>}
+                  {!loading && !error && summary.length === 0 && (
+                    <p>データがありません</p>
+                  )}
                   {loading && <p>読み込み中...</p>}
                   {error && <p style={{ color: 'red' }}>{error}</p>}
                 </div>
@@ -224,21 +275,13 @@ const App: React.FC = () => {
           )}
         </CurrentPng>
       )}
-      {/* タイムラインを下に移動。グラフのsummaryを渡す */}
       <div style={{ maxWidth: 700, margin: '32px auto 40px auto' }}>
         {!loading && !error && records.length > 0 && (
-          <Timeline
-            ref={timelineRef}
-            entries={records.map(r => ({
-              date: r.date,
-              score: r.score,
-              note: r.note,
-            }))}
-          />
+          <Timeline ref={timelineRef} entries={entries} />
         )}
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default App;
+export default App

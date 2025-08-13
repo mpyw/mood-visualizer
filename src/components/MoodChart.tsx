@@ -1,42 +1,61 @@
-import React from 'react';
-import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ErrorBar, ResponsiveContainer, Legend, ComposedChart, Bar } from 'recharts';
-import dayjs from 'dayjs';
-import type { MoodDaySummary } from '../utils/parseJsonl';
+import React from 'react'
+import {
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ErrorBar,
+  ResponsiveContainer,
+  Legend,
+  ComposedChart,
+  Bar,
+} from 'recharts'
+import dayjs from 'dayjs'
+import type { MoodDaySummary } from '../utils/parseJsonl'
 
 export type MoodChartProps = {
-  data: MoodDaySummary[];
-  month: string; // 'YYYY-MM'
-  chartRef?: React.RefObject<SVGSVGElement>;
-  onDotClick?: (date: string) => void; // 追加
-};
+  data: MoodDaySummary[]
+  month: string
+  chartRef?: React.RefObject<SVGSVGElement>
+  onDotClick?: (date: string) => void
+}
 
-// Recharts用データ整形
 type ChartRow = {
-  date: string; // YYYY-MM-DD
-  avg: number;
-  low: number;
-  high: number;
-};
+  date: string
+  avg: number
+  low: number
+  high: number
+}
 
-const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef, onDotClick }) => {
-  // Recharts用データ配列
-  const chartData: ChartRow[] = data.map(d => ({
+const MoodChart: React.FC<MoodChartProps> = ({
+  data,
+  month,
+  chartRef,
+  onDotClick,
+}) => {
+  const chartData: ChartRow[] = data.map((d) => ({
     date: d.date,
     avg: d.avg,
     low: d.low,
     high: d.high,
-    error: [d.avg - d.low, d.high - d.avg], // ErrorBar用
-  }));
+    error: [d.avg - d.low, d.high - d.avg],
+  }))
 
-  const today = dayjs().format('YYYY-MM-DD');
+  const today = dayjs().format('YYYY-MM-DD')
 
-  // XAxisのカスタムtick
-  const renderCustomTick = (props: { x: number; y: number; payload: { value: string } }) => {
-    const { x, y, payload } = props;
-    const isToday = payload.value === today;
-    // 日付の「日」部分と曜日を表示
-    const dateObj = dayjs(payload.value);
-    const dayLabel = dateObj.format('D(ddd)'); // 例: 12(Tue)
+  const renderCustomTick = ({
+    x,
+    y,
+    payload,
+  }: {
+    x: number
+    y: number
+    payload: { value: string }
+  }) => {
+    const isToday = payload.value === today
+    const dateObj = dayjs(payload.value)
+    const dayLabel = dateObj.format('D(ddd)')
     return (
       <g transform={`translate(${x},${y})`}>
         <text
@@ -52,42 +71,46 @@ const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef, onDotClick
           {dayLabel}
         </text>
       </g>
-    );
-  };
+    )
+  }
 
-  // dotのカスタム描画
-  const renderCustomDot = (props: { cx: number; cy: number; payload: ChartRow }) => {
-    const { cx, cy, payload } = props;
-    const isToday = payload.date === today;
+  const renderCustomDot = ({
+    cx,
+    cy,
+    payload,
+  }: {
+    cx: number
+    cy: number
+    payload: ChartRow
+  }) => {
+    const isToday = payload.date === today
     const handleClick = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (onDotClick) onDotClick(payload.date);
-    };
-    if (isToday) {
-      return (
-        <g onClick={handleClick} style={{ cursor: 'pointer' }}>
-          <circle
-            cx={cx}
-            cy={cy}
-            r={10}
-            fill="#fff"
-            stroke="#d32f2f"
-            strokeWidth={4}
-            style={{ filter: 'drop-shadow(0 0 6px #d32f2faa)' }}
-          />
-          <circle
-            cx={cx}
-            cy={cy}
-            r={5}
-            fill="#d32f2f"
-            stroke="#fff"
-            strokeWidth={2}
-          />
-        </g>
-      );
+      e.stopPropagation()
+      onDotClick?.(payload.date)
     }
-    return (
+    return isToday ? (
+      <g onClick={handleClick} style={{ cursor: 'pointer' }} key={payload.date}>
+        <circle
+          cx={cx}
+          cy={cy}
+          r={10}
+          fill="#fff"
+          stroke="#d32f2f"
+          strokeWidth={4}
+          style={{ filter: 'drop-shadow(0 0 6px #d32f2faa)' }}
+        />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={5}
+          fill="#d32f2f"
+          stroke="#fff"
+          strokeWidth={2}
+        />
+      </g>
+    ) : (
       <circle
+        key={payload.date}
         cx={cx}
         cy={cy}
         r={4}
@@ -95,15 +118,15 @@ const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef, onDotClick
         onClick={handleClick}
         style={{ cursor: 'pointer' }}
       />
-    );
-  };
+    )
+  }
 
   return (
     <div
       style={{
         width: '100%',
         minWidth: 320,
-        background: 'none', // 枠・背景を消す
+        background: 'none',
         borderRadius: 0,
         boxShadow: 'none',
         padding: 0,
@@ -116,8 +139,11 @@ const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef, onDotClick
     >
       <div style={{ position: 'relative', width: '100%', height: 540 }}>
         <ResponsiveContainer width="100%" height={540}>
-          <ComposedChart data={chartData} margin={{ top: 56, right: 40, left: 20, bottom: 32 }} ref={chartRef}>
-            {/* グラフ内タイトル（PNGにも含まれる） */}
+          <ComposedChart
+            data={chartData}
+            margin={{ top: 56, right: 40, left: 20, bottom: 32 }}
+            ref={chartRef}
+          >
             <text
               x="50%"
               y={28}
@@ -130,38 +156,36 @@ const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef, onDotClick
               {month} の気分グラフ
             </text>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" angle={-45} textAnchor="end" height={60} tick={renderCustomTick} />
+            <XAxis
+              dataKey="date"
+              angle={-45}
+              textAnchor="end"
+              height={60}
+              tick={renderCustomTick}
+            />
             <YAxis domain={[0, 10]} tickCount={11} />
             <Tooltip
-              formatter={(
-                v: number,
-                name: string,
-                item
-              ) => {
-                // itemはPayload<number, string>型
+              formatter={(v: number, name: string, item) => {
                 if (name === 'High/Low' && item && item.payload) {
-                  const { high, low } = item.payload as ChartRow;
-                  return [
-                    `High: ${high}\nLow: ${low}`,
-                    name
-                  ];
+                  const { high, low } = item.payload as ChartRow
+                  return [`High: ${high}\nLow: ${low}`, name]
                 }
-                return v.toFixed(2);
+                return v.toFixed(2)
               }}
             />
             <Legend />
-            {/* ローソク足風の棒（Bar） */}
             <Bar
               dataKey="low"
               fill="#bfc6e0"
               barSize={8}
               name="High/Low"
-              //eslint-disable-next-line @typescript-eslint/no-explicit-any
-              shape={(props: any) => { // TODO: any 型を適切に定義する
-                // 棒の上端はhigh, 下端はlow
-                const { x, width, payload, y, height } = props;
-                const barHeight = (payload.high - payload.low) / (payload.low - 0 || 1) * height;
-                const yHigh = y - barHeight;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              shape={(props: any) => {
+                const { x, width, payload, y, height } = props
+                const barHeight =
+                  ((payload.high - payload.low) / (payload.low - 0 || 1)) *
+                  height
+                const yHigh = y - barHeight
                 return (
                   <rect
                     x={x}
@@ -172,7 +196,7 @@ const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef, onDotClick
                     opacity={payload.date === today ? 0.9 : 0.7}
                     rx={2}
                   />
-                );
+                )
               }}
               isAnimationActive={false}
             />
@@ -190,7 +214,7 @@ const MoodChart: React.FC<MoodChartProps> = ({ data, month, chartRef, onDotClick
         </ResponsiveContainer>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default MoodChart;
+export default React.memo(MoodChart)
