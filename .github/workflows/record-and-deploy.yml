@@ -172,7 +172,7 @@ jobs:
 
       - name: Export PNG via Puppeteer
         run: |
-          tsx scripts/export_png.mts
+          npx tsx scripts/export_png.mts
         env:
           EXPORT_PNG_URL: http://localhost:4173
 
