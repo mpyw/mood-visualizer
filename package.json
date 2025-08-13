@@ -8,8 +8,10 @@
     "preview": "vite preview",
     "lint": "tsc --noEmit && eslint .",
     "fix": "eslint . --fix && prettier --write .",
-    "build:dev": "rm -rf dist && tsc -b && vite build",
-    "build:ci": "rm -rf dist && tsc -b && VITE_BASE_PATH=/mood-visualizer vite build"
+    "build": "vite build",
+    "build:dev": "npm run build",
+    "build:ci": "VITE_BASE_PATH=/mood-visualizer npm run build",
+    "postbuild": "tsx scripts/generate_rss.mts"
   },
   "dependencies": {
     "@types/file-saver": "^2.0.7",
@@ -35,7 +37,6 @@
     "globals": "^16.3.0",
     "prettier": "^3.0.0",
     "puppeteer": "^24.16.1",
-    "ts-node": "^10.9.2",
     "tsx": "^4.20.4",
     "typescript-eslint": "^8.39.1",
     "vite": "^7.1.2"

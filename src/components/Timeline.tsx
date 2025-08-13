@@ -140,7 +140,13 @@ export const Timeline = React.memo(
               </span>
             </label>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+            }}
+          >
             {pagedEntries.map((entry, i) => (
               <div
                 key={entry.date + '-' + i}
