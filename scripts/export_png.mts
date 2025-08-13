@@ -10,6 +10,7 @@ import * as fs from 'fs'
   })
   console.log('[debug] browser launched')
   const page = await browser.newPage()
+  await page.emulateTimezone('Asia/Tokyo')
   page.on('console', (msg) => {
     // Puppeteerブラウザ内のconsole.logをNode.js側に出力
     console.log('[browser]', msg.text())
