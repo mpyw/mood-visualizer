@@ -129,28 +129,52 @@ export function useMonthSummary(
           const curr = parseJsonl(currText)
           const next = parseJsonl(nextText)
           allRecords = [...prev, ...curr, ...next]
-          const result = [...curr]
-          let prevIdx = prev.length - 1
+
+          // 取得順を「現在月を中心に、前→後の順で交互に追加」
+          const currSummaries = groupByDate(curr)
+          const prevSummaries = groupByDate(prev)
+          const nextSummaries = groupByDate(next)
+          const result: typeof currSummaries = [...currSummaries]
+          let prevIdx = prevSummaries.length - 1
           let nextIdx = 0
           let turn = 0
+          const dateSet = new Set(result.map((d) => d.date))
           while (
             result.length < 30 &&
-            (prevIdx >= 0 || nextIdx < next.length)
+            (prevIdx >= 0 || nextIdx < nextSummaries.length)
           ) {
             if (turn % 2 === 0 && prevIdx >= 0) {
-              result.unshift(prev[prevIdx--])
-            } else if (turn % 2 === 1 && nextIdx < next.length) {
-              result.push(next[nextIdx++])
+              const d = prevSummaries[prevIdx--]
+              if (!dateSet.has(d.date)) {
+                result.unshift(d)
+                dateSet.add(d.date)
+              }
+            } else if (turn % 2 === 1 && nextIdx < nextSummaries.length) {
+              const d = nextSummaries[nextIdx++]
+              if (!dateSet.has(d.date)) {
+                result.push(d)
+                dateSet.add(d.date)
+              }
             } else if (prevIdx >= 0) {
-              result.unshift(prev[prevIdx--])
-            } else if (nextIdx < next.length) {
-              result.push(next[nextIdx++])
+              const d = prevSummaries[prevIdx--]
+              if (!dateSet.has(d.date)) {
+                result.unshift(d)
+                dateSet.add(d.date)
+              }
+            } else if (nextIdx < nextSummaries.length) {
+              const d = nextSummaries[nextIdx++]
+              if (!dateSet.has(d.date)) {
+                result.push(d)
+                dateSet.add(d.date)
+              }
             }
             turn++
           }
+          // 30件にスライス
+          const limitedResult = result.slice(0, 30)
           dispatch({
             type: 'FETCH_SUCCESS',
-            summary: groupByDate(result),
+            summary: limitedResult,
             records: allRecords.sort((a, b) => (a.date < b.date ? 1 : -1)),
           })
         } else {
