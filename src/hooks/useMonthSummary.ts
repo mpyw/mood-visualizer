@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useCallback, useReducer } from 'react'
 import {
   parseJsonl,
   groupByDate,
@@ -9,15 +9,65 @@ import {
 const BASE_PATH = import.meta.env.VITE_BASE_PATH || ''
 const MOOD_HISTORY_PATH = `${BASE_PATH}/data/history/`
 
+// 状態型
+interface State {
+  summary: MoodDaySummary[]
+  records: MoodRecord[]
+  loading: boolean
+  error: string | null
+}
+
+type Action =
+  | { type: 'FETCH_START' }
+  | { type: 'FETCH_SUCCESS'; summary: MoodDaySummary[]; records: MoodRecord[] }
+  | { type: 'FETCH_ERROR'; error: string }
+  | { type: 'ADD_RECORDS'; records: MoodRecord[] }
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'FETCH_START':
+      return { ...state, loading: true, error: null }
+    case 'FETCH_SUCCESS':
+      return {
+        ...state,
+        summary: action.summary,
+        records: action.records,
+        loading: false,
+        error: null,
+      }
+    case 'FETCH_ERROR':
+      return { ...state, loading: false, error: action.error }
+    case 'ADD_RECORDS': {
+      // 重複排除
+      const merged = [
+        ...state.records,
+        ...action.records.filter(
+          (fr) =>
+            !state.records.some(
+              (r) =>
+                r.date === fr.date && r.score === fr.score && r.note === fr.note
+            )
+        ),
+      ]
+      merged.sort((a, b) => (a.date < b.date ? 1 : -1))
+      return { ...state, records: merged }
+    }
+    default:
+      return state
+  }
+}
+
 export function useMonthSummary(
   selectedMonth: string,
   includeAdjacent: boolean,
   months: string[]
 ) {
-  const [summary, setSummary] = useState<MoodDaySummary[]>([])
-  const [records, setRecords] = useState<MoodRecord[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [state, dispatch] = useReducer(reducer, {
+    summary: [],
+    records: [],
+    loading: false,
+    error: null,
+  })
 
   const tryFetchRecordByDate = useCallback(
     async (date: string): Promise<null | MoodRecord> => {
@@ -30,22 +80,7 @@ export function useMonthSummary(
         const fetchedRecords = parseJsonl(text)
         const found = fetchedRecords.filter((r) => r.date.startsWith(date))
         if (found.length > 0) {
-          setRecords((prevRecords) => {
-            const merged = [
-              ...prevRecords,
-              ...fetchedRecords.filter(
-                (fr) =>
-                  !prevRecords.some(
-                    (r) =>
-                      r.date === fr.date &&
-                      r.score === fr.score &&
-                      r.note === fr.note
-                  )
-              ),
-            ]
-            merged.sort((a, b) => (a.date < b.date ? 1 : -1))
-            return merged
-          })
+          dispatch({ type: 'ADD_RECORDS', records: fetchedRecords })
           return found[0]
         }
         return null
@@ -59,8 +94,7 @@ export function useMonthSummary(
   useEffect(() => {
     if (!selectedMonth) return
     ;(async () => {
-      setLoading(true)
-      setError(null)
+      dispatch({ type: 'FETCH_START' })
       try {
         let allRecords: MoodRecord[] = []
         if (includeAdjacent) {
@@ -114,23 +148,27 @@ export function useMonthSummary(
             }
             turn++
           }
-          setSummary(groupByDate(result))
+          dispatch({
+            type: 'FETCH_SUCCESS',
+            summary: groupByDate(result),
+            records: allRecords.sort((a, b) => (a.date < b.date ? 1 : -1)),
+          })
         } else {
           const currText = await fetch(
             `${MOOD_HISTORY_PATH}${selectedMonth}.jsonl`
           ).then((r) => (r.ok ? r.text() : ''))
           allRecords = parseJsonl(currText)
-          setSummary(groupByDate(allRecords))
+          dispatch({
+            type: 'FETCH_SUCCESS',
+            summary: groupByDate(allRecords),
+            records: allRecords.sort((a, b) => (a.date < b.date ? 1 : -1)),
+          })
         }
-        allRecords.sort((a, b) => (a.date < b.date ? 1 : -1))
-        setRecords(allRecords)
       } catch {
-        setError('データ取得に失敗しました')
-      } finally {
-        setLoading(false)
+        dispatch({ type: 'FETCH_ERROR', error: 'データ取得に失敗しました' })
       }
     })()
   }, [selectedMonth, includeAdjacent, months])
 
-  return { summary, records, loading, error, tryFetchRecordByDate }
+  return { ...state, tryFetchRecordByDate }
 }
