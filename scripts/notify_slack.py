@@ -25,6 +25,7 @@ def build_blocks(input_date, score, note):
     except Exception:
         s = None
     if s is None: mood_emoji = ':grey_question:'
+    elif s >= 10: mood_emoji = ':star-struck:'
     elif s >= 8:  mood_emoji = ':grinning:'
     elif s >= 6:  mood_emoji = ':slightly_smiling_face:'
     elif s >= 4:  mood_emoji = ':neutral_face:'
