@@ -52,7 +52,7 @@ export const TimelineCard: React.FC<{ entry: TimelineEntry }> = React.memo(
         <img
           src={selectAvatarUrl(entry.score)}
           alt="avatar"
-          style={{ width: 48, height: 48, borderRadius: '50%' }}
+          style={{ width: 64, height: 64, borderRadius: '50%' }}
         />
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
