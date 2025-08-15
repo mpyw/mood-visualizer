@@ -37,7 +37,7 @@ export const TimelineCard: React.FC<{ entry: TimelineEntry }> = React.memo(
         style={{
           display: 'flex',
           flexDirection: 'row',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           gap: 16,
           background: '#fff',
           borderRadius: 16,
