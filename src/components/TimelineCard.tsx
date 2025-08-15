@@ -6,8 +6,27 @@ export type TimelineEntry = {
   note?: string
 }
 
-const AVATAR_URL = 'https://avatars.githubusercontent.com/u/1351893?v=4'
+const BASE_PATH = import.meta.env.VITE_BASE_PATH || ''
 const USERNAME = '@mpyw'
+
+const selectAvatarUrl = (score: number): string => {
+  if (score >= 10) {
+    return `${BASE_PATH}/mpyw-star-struck.png`
+  }
+  if (score >= 8) {
+    return `${BASE_PATH}/mpyw-grinning.png`
+  }
+  if (score >= 6) {
+    return `${BASE_PATH}/mpyw-slightly_smiling_face.png`
+  }
+  if (score >= 4) {
+    return `${BASE_PATH}/mpyw-neutral_face.png`
+  }
+  if (score >= 2) {
+    return `${BASE_PATH}/mpyw-slightly_frowning_face.png`
+  }
+  return `${BASE_PATH}/mpyw-disappointed.png`
+}
 
 export const TimelineCard: React.FC<{ entry: TimelineEntry }> = React.memo(
   ({ entry }) => {
@@ -31,7 +50,7 @@ export const TimelineCard: React.FC<{ entry: TimelineEntry }> = React.memo(
         }}
       >
         <img
-          src={AVATAR_URL}
+          src={selectAvatarUrl(entry.score)}
           alt="avatar"
           style={{ width: 48, height: 48, borderRadius: '50%' }}
         />
