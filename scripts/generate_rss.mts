@@ -67,7 +67,8 @@ function buildRss(items: any[]) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"
   xmlns:mv="${NS_URL}"
-  xmlns:atom="http://www.w3.org/2005/Atom">
+  xmlns:atom="http://www.w3.org/2005/Atom"
+  xmlns:media="http://search.yahoo.com/mrss/">
   <channel>
     <title>${AUTHOR} Mood Feed</title>
     <link>${SITE_URL}/</link>
@@ -81,6 +82,7 @@ ${items
       <pubDate>${new Date(item.date).toUTCString()}</pubDate>
       <guid>${SITE_URL}#${item.date}</guid>
       ${item.note ? `<description>${escapeXml(item.note)}</description>` : '<description />'}
+      <media:thumbnail url="${selectAvatarUrl(item.score)}" />
       <mv:score>${item.score}</mv:score>
       ${item.note ? `<mv:note>${escapeXml(item.note)}</mv:note>` : '<mv:note />'}
       <mv:avatarUrl>${selectAvatarUrl(item.score)}</mv:avatarUrl>
