@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import MonthSelector from './components/MonthSelector'
 import MoodChart from './components/MoodChart'
 import { useMonthSummary } from './hooks/useMonthSummary'
@@ -12,49 +12,122 @@ function getCurrentMonth() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
+function getMonthFromHash() {
+  const hash = window.location.hash.replace(/^#/, '')
+  if (!hash) return null
+  const match = hash.match(/^(\d{4})-(\d{2})(?:-|$)/)
+  if (match) {
+    const [, year, month] = match
+    return `${year}-${month}`
+  }
+  return null
+}
+
 const App: React.FC = () => {
-  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth())
+  const [selectedMonth, setSelectedMonth] = useState(
+    getMonthFromHash() || getCurrentMonth()
+  )
   const [includeAdjacent, setIncludeAdjacent] = useState(true)
-  const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(
+  const [showOnlyWithNote, setShowOnlyWithNote] = useState(true)
+  const [pendingScrollDate, setPendingScrollDate] = useState<{
+    date: string
+    exact: boolean
+  } | null>(null)
+  const [pendingHashScroll, setPendingHashScroll] = useState<string | null>(
     null
   )
   const timelineRef = useRef<TimelineHandle>(null)
 
   const { months, loading: monthsLoading, error: monthsError } = useMonthList()
-  const { summary, records, loading, error, tryFetchRecordByDate } =
-    useMonthSummary(selectedMonth, includeAdjacent, months)
+  const {
+    summary,
+    records,
+    loading,
+    error,
+    initialized,
+    tryFetchRecordByDate,
+  } = useMonthSummary(selectedMonth, includeAdjacent, months)
 
-  const entries = useMemo(
-    () =>
-      records.map((r) => ({
-        date: r.date,
-        score: r.score,
-        note: r.note,
-      })),
+  // スクロール関数
+  const scrollToDate = useCallback(
+    async (date: string, exact: boolean) => {
+      // 完全一致検索
+      if (exact) {
+        if (records.some((e) => e.date === date)) {
+          return (await timelineRef.current?.scrollToExactDate(date)) ?? false
+        }
+        return false
+      }
+      // 先頭一致検索
+      const found = records.filter((e) => e.date.startsWith(date))
+      if (found.length > 0) {
+        const latest = found.reduce((a, b) => (a.date > b.date ? a : b))
+        return (
+          (await timelineRef.current?.scrollToExactDate(latest.date)) ?? false
+        )
+      }
+      return false
+    },
     [records]
   )
 
+  // スクロール関数を ref に保存し，常に最新の records を参照できるようにする
+  const scrollToDateRef = useRef(scrollToDate)
+  useEffect(() => {
+    scrollToDateRef.current = scrollToDate
+  }, [scrollToDate])
+
+  // グラフポイントクリック時はその日付の最新投稿の完全タイムスタンプを使う
   const handleDotClick = useCallback(
     async (date: string) => {
-      const found = records.filter((r) => r.date.startsWith(date))
-      if (found.length > 0) {
-        timelineRef.current?.scrollToDate(date)
+      if (await scrollToDate(date, true)) {
         return
       }
-      if (typeof tryFetchRecordByDate === 'function' && found.length === 0) {
-        const fetched = await tryFetchRecordByDate(date)
-        if (fetched) setPendingScrollDate(date)
-      }
+      const fetched = await tryFetchRecordByDate(date)
+      if (fetched) setPendingScrollDate({ date: fetched.date, exact: true })
     },
-    [records, tryFetchRecordByDate]
+    [scrollToDate, tryFetchRecordByDate]
   )
 
+  // ハッシュ流入時のスクロール処理を1回だけ実行する
+  // 意図的に依存配列に showOnlyWithNote を含めない
   useEffect(() => {
-    if (pendingScrollDate && timelineRef.current) {
-      timelineRef.current.scrollToDate(pendingScrollDate)
-      setPendingScrollDate(null)
+    // 初回フェッチが完了していない場合は何もしない
+    if (!initialized || !window.location.hash) return
+
+    // ハッシュから日付を取得
+    const hash = window.location.hash.replace(/^#/, '') // スクロールできた場合，もしくはスクロールできなかったが showOnlyWithNote が既に false の場合は何もしない
+    ;(async () => {
+      const res = await scrollToDateRef.current?.(hash, false)
+      if (res || !showOnlyWithNote) {
+        return
+      }
+      // スクロールできなかった場合は showOnlyWithNote を false にして再度スクロールを試みる
+      setShowOnlyWithNote(false)
+      setPendingHashScroll(hash)
+    })()
+  }, [initialized]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (pendingHashScroll && !showOnlyWithNote) {
+      ;(async () => {
+        if (await scrollToDateRef.current?.(pendingHashScroll, false)) {
+          setPendingHashScroll(null)
+        }
+      })()
     }
-  }, [records, pendingScrollDate])
+  }, [showOnlyWithNote, records, pendingHashScroll])
+
+  useEffect(() => {
+    ;(async () => {
+      if (
+        pendingScrollDate &&
+        (await scrollToDate(pendingScrollDate.date, pendingScrollDate.exact))
+      ) {
+        setPendingScrollDate(null)
+      }
+    })()
+  }, [records, scrollToDate, pendingScrollDate])
 
   return (
     <div
@@ -277,7 +350,12 @@ const App: React.FC = () => {
       )}
       <div style={{ maxWidth: 700, margin: '32px auto 40px auto' }}>
         {!loading && !error && records.length > 0 && (
-          <Timeline ref={timelineRef} entries={entries} />
+          <Timeline
+            ref={timelineRef}
+            entries={records}
+            showOnlyWithNote={showOnlyWithNote}
+            setShowOnlyWithNote={setShowOnlyWithNote}
+          />
         )}
       </div>
     </div>

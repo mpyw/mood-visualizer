@@ -15,6 +15,7 @@ interface State {
   records: MoodRecord[]
   loading: boolean
   error: string | null
+  initialized: boolean
 }
 
 type Action =
@@ -34,6 +35,7 @@ function reducer(state: State, action: Action): State {
         records: action.records,
         loading: false,
         error: null,
+        initialized: true,
       }
     case 'FETCH_ERROR':
       return { ...state, loading: false, error: action.error }
@@ -67,6 +69,7 @@ export function useMonthSummary(
     records: [],
     loading: false,
     error: null,
+    initialized: false,
   })
 
   const tryFetchRecordByDate = useCallback(
