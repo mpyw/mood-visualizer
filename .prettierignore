@@ -1,2 +1,3 @@
 .prettierrc
 .prettierignore
+public/data/latest-slack-update.json
