@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>mv:score, mv:note RSS拡張仕様</title>
+  </head>
+  <body>
+    <h1>mv:score, mv:note RSS拡張仕様</h1>
+    <p>
+      このページは
+      <code>https://mpyw.me/mood-visualizer/ns</code>
+      名前空間で利用される独自RSS拡張タグの仕様を説明します。
+    </p>
+    <h2>mv:score</h2>
+    <ul>
+      <li>用途: 気分スコア（数値）を表します。</li>
+      <li>型: 整数</li>
+      <li>例: <code>&lt;mv:score&gt;7&lt;/mv:score&gt;</code></li>
+    </ul>
+    <h2>mv:note</h2>
+    <ul>
+      <li>用途: 気分に関するメモやコメントを表します。</li>
+      <li>型: 文字列（空の場合は <code>&lt;mv:note /&gt;</code>）</li>
+      <li>例: <code>&lt;mv:note&gt;今日はいい気分&lt;/mv:note&gt;</code></li>
+    </ul>
+    <h2>mv:avatarUrl</h2>
+    <ul>
+      <li>用途: 気分スコアに応じたアバター画像のURLを表します。</li>
+      <li>型: 文字列（画像URL）</li>
+      <li>
+        スコアごとの対応:
+        <ul>
+          <li>
+            score &gt;= 10:
+            <code>https://mpyw.me/mood-visualizer/mpyw-star-struck.png</code>
+          </li>
+          <li>
+            score &gt;= 8:
+            <code>https://mpyw.me/mood-visualizer/mpyw-grinning.png</code>
+          </li>
+          <li>
+            score &gt;= 6:
+            <code
+              >https://mpyw.me/mood-visualizer/mpyw-slightly_smiling_face.png</code
+            >
+          </li>
+          <li>
+            score &gt;= 4:
+            <code>https://mpyw.me/mood-visualizer/mpyw-neutral_face.png</code>
+          </li>
+          <li>
+            score &gt;= 2:
+            <code
+              >https://mpyw.me/mood-visualizer/mpyw-slightly_frowning_face.png</code
+            >
+          </li>
+          <li>
+            score &lt; 2:
+            <code>https://mpyw.me/mood-visualizer/mpyw-disappointed.png</code>
+          </li>
+        </ul>
+      </li>
+    </ul>
+    <h2>名前空間URL</h2>
+    <p>
+      このページ自体が仕様の説明ページです。RSSフィードの
+      <code>xmlns:mv="https://mpyw.me/mood-visualizer/ns"</code>
+      として利用してください。
+    </p>
+  </body>
+</html>

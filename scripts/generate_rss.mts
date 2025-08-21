@@ -7,8 +7,13 @@ const __dirname = path.dirname(__filename)
 
 const HISTORY_DIR = path.join(__dirname, '../public/data/history')
 const OUTPUT_PATH = path.join(__dirname, '../dist/feed.xml') // distに出力
-const SITE_URL = 'https://github.com/mpyw/mood-visualizer'
 const AUTHOR = '@mpyw'
+
+const ORIGIN = 'https://mpyw.me'
+const BASE_PATH = '/mood-visualizer'
+const SITE_URL = ORIGIN + BASE_PATH
+const FEED_URL = SITE_URL + '/feed.xml'
+const NS_URL = SITE_URL + '/ns'
 
 function parseJsonlFile(filePath: string) {
   return fs
@@ -39,17 +44,36 @@ function escapeXml(str: string) {
   )
 }
 
+function selectAvatarUrl(score: number): string {
+  if (score >= 10) {
+    return `${SITE_URL}/mpyw-star-struck.png`
+  }
+  if (score >= 8) {
+    return `${SITE_URL}/mpyw-grinning.png`
+  }
+  if (score >= 6) {
+    return `${SITE_URL}/mpyw-slightly_smiling_face.png`
+  }
+  if (score >= 4) {
+    return `${SITE_URL}/mpyw-neutral_face.png`
+  }
+  if (score >= 2) {
+    return `${SITE_URL}/mpyw-slightly_frowning_face.png`
+  }
+  return `${SITE_URL}/mpyw-disappointed.png`
+}
+
 function buildRss(items: any[]) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"
-  xmlns:mv="https://example.com/mood-visualizer"
+  xmlns:mv="${NS_URL}"
   xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>${AUTHOR} Mood Feed</title>
-    <link>${SITE_URL}</link>
+    <link>${SITE_URL}/</link>
     <description>${AUTHOR} の気分変化RSS</description>
     <language>ja</language>
-    <atom:link rel="self" type="application/rss+xml" href="${SITE_URL}/dist/feed.xml" />
+    <atom:link rel="self" type="application/rss+xml" href="${FEED_URL}" />
 ${items
   .map(
     (item) => `    <item>
@@ -59,6 +83,7 @@ ${items
       ${item.note ? `<description>${escapeXml(item.note)}</description>` : '<description />'}
       <mv:score>${item.score}</mv:score>
       ${item.note ? `<mv:note>${escapeXml(item.note)}</mv:note>` : '<mv:note />'}
+      <mv:avatarUrl>${selectAvatarUrl(item.score)}</mv:avatarUrl>
     </item>`
   )
   .join('\n')}
