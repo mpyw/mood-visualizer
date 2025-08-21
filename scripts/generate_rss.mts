@@ -40,10 +40,10 @@ function escapeXml(str: string) {
 }
 
 function buildRss(items: any[]) {
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0">\n<channel>\n<title>${AUTHOR} Mood Feed</title>\n<link>${SITE_URL}</link>\n<description>${AUTHOR} の気分変化RSS</description>\n<language>ja</language>\n${items
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:mv="https://example.com/mood-visualizer">\n<channel>\n<title>${AUTHOR} Mood Feed</title>\n<link>${SITE_URL}</link>\n<description>${AUTHOR} の気分変化RSS</description>\n<language>ja</language>\n${items
     .map(
       (item) =>
-        `  <item>\n    <title>Score: ${item.score}${item.note ? ' - ' + escapeXml(item.note) : ''}</title>\n    <pubDate>${new Date(item.date).toUTCString()}</pubDate>\n    <guid>${SITE_URL}#${item.date}</guid>\n    <description>${item.note ? escapeXml(item.note) : ''}</description>\n    <score>${item.score}</score>\n    <note>${item.note ? escapeXml(item.note) : ''}</note>\n  </item>`
+        `  <item>\n    <title>Score: ${item.score}${item.note ? ' - ' + escapeXml(item.note) : ''}</title>\n    <pubDate>${new Date(item.date).toUTCString()}</pubDate>\n    <guid>${SITE_URL}#${item.date}</guid>\n    <description>${item.note ? escapeXml(item.note) : ''}</description>\n    <mv:score>${item.score}</mv:score>\n    <mv:note>${item.note ? escapeXml(item.note) : ''}</mv:note>\n  </item>`
     )
     .join('\n')}\n</channel>\n</rss>\n`
 }
