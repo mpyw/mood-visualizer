@@ -42,9 +42,9 @@ export const TimelineCard: React.FC<{ entry: TimelineEntry }> = React.memo(
           background: '#fff',
           borderRadius: 16,
           boxShadow: '0 2px 8px #0001',
-          padding: entry.note ? 24 : 12,
+          padding: 24,
           margin: '0 0 18px 0',
-          minHeight: entry.note ? 120 : 60,
+          minHeight: 120,
           maxWidth: 520,
           width: 520,
         }}
@@ -66,23 +66,32 @@ export const TimelineCard: React.FC<{ entry: TimelineEntry }> = React.memo(
               Score: {entry.score}
             </span>
           </div>
-          {entry.note && (
-            <div
-              style={{
-                margin: '14px 0 0 0',
-                fontSize: 17,
-                color: '#222',
-                whiteSpace: 'pre-wrap',
-                lineHeight: 1.7,
-                background: '#f3f6fd',
-                borderRadius: 8,
-                padding: '12px 16px',
-                fontWeight: 500,
-              }}
-            >
-              {entry.note}
-            </div>
-          )}
+          <div
+            style={
+              entry.note
+                ? {
+                    margin: '14px 0 0 0',
+                    fontSize: 17,
+                    color: '#222',
+                    whiteSpace: 'pre-wrap',
+                    lineHeight: 1.7,
+                    background: '#f3f6fd',
+                    borderRadius: 8,
+                    padding: '12px 16px',
+                    fontWeight: 500,
+                  }
+                : {
+                    margin: '14px 0 0 0',
+                    fontSize: 17,
+                    color: '#222',
+                    whiteSpace: 'pre-wrap',
+                    lineHeight: 1.7,
+                    fontWeight: 500,
+                  }
+            }
+          >
+            {entry.note}
+          </div>
         </div>
       </div>
     )
