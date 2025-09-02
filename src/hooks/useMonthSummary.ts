@@ -77,7 +77,9 @@ export function useMonthSummary(
       const month = date.slice(0, 7)
       if (!months.includes(month)) return null
       try {
-        const res = await fetch(`${MOOD_HISTORY_PATH}${month}.jsonl`)
+        const res = await fetch(`${MOOD_HISTORY_PATH}${month}.jsonl`, {
+          cache: 'no-cache',
+        })
         if (!res.ok) return null
         const text = await res.text()
         const fetchedRecords = parseJsonl(text)

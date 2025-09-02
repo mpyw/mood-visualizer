@@ -17,7 +17,9 @@ export function useMonthList() {
     setError(null)
     ;(async () => {
       try {
-        const res = await fetch(`${BASE_PATH}/data/history-list.jsonl`)
+        const res = await fetch(`${BASE_PATH}/data/history-list.jsonl`, {
+          cache: 'no-cache',
+        })
         if (!res.ok) throw new Error()
         const text = await res.text()
         const months = text
