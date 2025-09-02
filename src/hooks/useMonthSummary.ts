@@ -116,17 +116,17 @@ export function useMonthSummary(
           const nextMonthExists = months.includes(nextMonth)
           const fetches = [
             prevMonthExists
-              ? fetch(`${MOOD_HISTORY_PATH}${prevMonth}.jsonl`).then((r) =>
-                  r.ok ? r.text() : ''
-                )
+              ? fetch(`${MOOD_HISTORY_PATH}${prevMonth}.jsonl`, {
+                  cache: 'no-cache',
+                }).then((r) => (r.ok ? r.text() : ''))
               : Promise.resolve(''),
-            fetch(`${MOOD_HISTORY_PATH}${selectedMonth}.jsonl`).then((r) =>
-              r.ok ? r.text() : ''
-            ),
+            fetch(`${MOOD_HISTORY_PATH}${selectedMonth}.jsonl`, {
+              cache: 'no-cache',
+            }).then((r) => (r.ok ? r.text() : '')),
             nextMonthExists
-              ? fetch(`${MOOD_HISTORY_PATH}${nextMonth}.jsonl`).then((r) =>
-                  r.ok ? r.text() : ''
-                )
+              ? fetch(`${MOOD_HISTORY_PATH}${nextMonth}.jsonl`, {
+                  cache: 'no-cache',
+                }).then((r) => (r.ok ? r.text() : ''))
               : Promise.resolve(''),
           ]
           const [prevText, currText, nextText] = await Promise.all(fetches)
@@ -184,7 +184,8 @@ export function useMonthSummary(
           })
         } else {
           const currText = await fetch(
-            `${MOOD_HISTORY_PATH}${selectedMonth}.jsonl`
+            `${MOOD_HISTORY_PATH}${selectedMonth}.jsonl`,
+            { cache: 'no-cache' }
           ).then((r) => (r.ok ? r.text() : ''))
           allRecords = parseJsonl(currText)
           dispatch({
