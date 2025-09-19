@@ -21,12 +21,16 @@ export type MoodChartProps = {
   onDotClick?: (date: string) => void
 }
 
-type ChartRow = {
-  date: string
-  avg: number
-  low: number
-  high: number
-}
+type ChartRow =
+  | {
+      present: true
+      date: string
+      avg: number
+      low: number
+      high: number
+      error: number[]
+    }
+  | { present: false; date: string }
 
 const MoodChart: React.FC<MoodChartProps> = ({
   data,
@@ -34,15 +38,38 @@ const MoodChart: React.FC<MoodChartProps> = ({
   chartRef,
   onDotClick,
 }) => {
-  const chartData: ChartRow[] = data.map((d) => ({
-    date: d.date,
-    avg: d.avg,
-    low: d.low,
-    high: d.high,
-    error: [d.avg - d.low, d.high - d.avg],
-  }))
+  // 月初・月末・本日の日付を取得し、グラフ表示範囲を決定
+  const startDate = dayjs(month + '-01')
+  const lastDayOfMonth = startDate.endOf('month')
+  const today = dayjs()
+  const endDate = today.isBefore(lastDayOfMonth) ? today : lastDayOfMonth
 
-  const today = dayjs().format('YYYY-MM-DD')
+  // 月内の表示対象日付リストを生成
+  const allDates = Array.from(
+    { length: endDate.diff(startDate, 'day') + 1 },
+    (_, i) => startDate.add(i, 'day').format('YYYY-MM-DD')
+  )
+
+  // 日付ごとにデータを補完
+  const summaryByDate = Object.fromEntries(data.map((d) => [d.date, d]))
+  const chartData: ChartRow[] = allDates.map((date) =>
+    summaryByDate[date]
+      ? {
+          present: true,
+          date,
+          avg: summaryByDate[date].avg,
+          low: summaryByDate[date].low,
+          high: summaryByDate[date].high,
+          error: [
+            summaryByDate[date].avg - summaryByDate[date].low,
+            summaryByDate[date].high - summaryByDate[date].avg,
+          ],
+        }
+      : {
+          present: false,
+          date,
+        }
+  )
 
   const renderCustomTick = ({
     x,
@@ -53,7 +80,7 @@ const MoodChart: React.FC<MoodChartProps> = ({
     y: number
     payload: { value: string }
   }) => {
-    const isToday = payload.value === today
+    const isToday = payload.value === today.format('YYYY-MM-DD')
     const dateObj = dayjs(payload.value)
     const dayLabel = dateObj.format('D(ddd)')
     return (
@@ -83,7 +110,10 @@ const MoodChart: React.FC<MoodChartProps> = ({
     cy: number
     payload: ChartRow
   }) => {
-    const isToday = payload.date === today
+    if (!payload.present) {
+      return null
+    }
+    const isToday = payload.date === today.format('YYYY-MM-DD')
     const handleClick = (e: React.MouseEvent) => {
       e.stopPropagation()
       onDotClick?.(payload.date)
@@ -192,8 +222,14 @@ const MoodChart: React.FC<MoodChartProps> = ({
                     y={yHigh}
                     width={width}
                     height={barHeight}
-                    fill={payload.date === today ? '#d32f2f' : '#bfc6e0'}
-                    opacity={payload.date === today ? 0.9 : 0.7}
+                    fill={
+                      payload.date === today.format('YYYY-MM-DD')
+                        ? '#d32f2f'
+                        : '#bfc6e0'
+                    }
+                    opacity={
+                      payload.date === today.format('YYYY-MM-DD') ? 0.9 : 0.7
+                    }
                     rx={2}
                   />
                 )
