@@ -249,6 +249,7 @@ const MoodChart: React.FC<MoodChartProps> = ({
               activeDot={false}
               name="Avg"
               isAnimationActive={false}
+              connectNulls={true}
             />
           </ComposedChart>
         </ResponsiveContainer>
