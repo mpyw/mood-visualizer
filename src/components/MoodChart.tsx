@@ -111,7 +111,7 @@ const MoodChart: React.FC<MoodChartProps> = ({
     payload: ChartRow
   }) => {
     if (!payload.present) {
-      return null
+      return <></>
     }
     const isToday = payload.date === today.format('YYYY-MM-DD')
     const handleClick = (e: React.MouseEvent) => {
@@ -197,8 +197,11 @@ const MoodChart: React.FC<MoodChartProps> = ({
             <Tooltip
               formatter={(v: number, name: string, item) => {
                 if (name === 'High/Low' && item && item.payload) {
-                  const { high, low } = item.payload as ChartRow
-                  return [`High: ${high}\nLow: ${low}`, name]
+                  const row = item as ChartRow
+                  if (row.present) {
+                    const { high, low } = row
+                    return [`High: ${high}\nLow: ${low}`, name]
+                  }
                 }
                 return v.toFixed(2)
               }}
