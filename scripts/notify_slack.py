@@ -140,8 +140,9 @@ def save_state(date_str, thread_ts):
 
 if __name__ == '__main__':
     if not SLACK_USER_TOKEN or not SLACK_CHANNEL_ID:
-        print('SLACK_USER_TOKEN または SLACK_CHANNEL_ID が未設定です', file=sys.stderr)
-        sys.exit(1)
+        # トークン/チャンネル未設定なら Slack 投稿をスキップ（記録ワークフローは継続）
+        print('::notice::SLACK_USER_TOKEN または SLACK_CHANNEL_ID が未設定のため Slack 投稿をスキップしました')
+        sys.exit(0)
 
     score = os.environ.get('INPUT_SCORE')
     note = os.environ.get('INPUT_NOTE')
@@ -179,5 +180,6 @@ if __name__ == '__main__':
                              thread_ts=saved_thread_ts, reply_broadcast=rb)
 
     except Exception as e:
-        print(f'Slack 投稿失敗: {e}', file=sys.stderr)
-        sys.exit(1)
+        # 投稿失敗（トークン失効・権限不足・API 仕様変更等）でも記録ワークフローは落とさない
+        print(f'::warning::Slack 投稿に失敗しましたが記録は継続します: {e}')
+        sys.exit(0)

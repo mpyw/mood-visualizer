@@ -9,13 +9,13 @@ const BASE_PATH = import.meta.env.VITE_BASE_PATH || ''
 
 export function useMonthList() {
   const [months, setMonths] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setLoading(true)
-    setError(null)
     ;(async () => {
+      setLoading(true)
+      setError(null)
       try {
         const res = await fetch(`${BASE_PATH}/data/history-list.jsonl`, {
           cache: 'no-cache',

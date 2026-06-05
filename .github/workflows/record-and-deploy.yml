@@ -19,8 +19,13 @@ on:
           - '8'
           - '9'
           - '10'
+      notify_slack:
+        description: 'Slack へ投稿する（OFF なら記録のみ）'
+        required: false
+        type: boolean
+        default: false
       reply_broadcast:
-        description: '2回目以降の投稿でスレッド外にも通知するか'
+        description: '2回目以降の投稿でスレッド外にも通知するか（Slack 投稿時のみ）'
         required: false
         type: boolean
         default: true
@@ -156,36 +161,43 @@ jobs:
         shell: python
 
       - name: Set up Node.js
+        if: ${{ github.event.inputs.notify_slack == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - name: Install Dependencies (Node.js)
+        if: ${{ github.event.inputs.notify_slack == 'true' }}
         run: |
           npm ci --include=dev
 
       - name: Build and Preview (Vite)
+        if: ${{ github.event.inputs.notify_slack == 'true' }}
         run: |
           npm run build:dev
           npm run preview &
           sleep 5
 
       - name: Export PNG via Puppeteer
+        if: ${{ github.event.inputs.notify_slack == 'true' }}
         run: |
           npx tsx scripts/export_png.mts
         env:
           EXPORT_PNG_URL: http://localhost:4173
 
       - name: Set up Python
+        if: ${{ github.event.inputs.notify_slack == 'true' }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install Python dependencies
+        if: ${{ github.event.inputs.notify_slack == 'true' }}
         run: |
           pip install requests
 
       - name: Notify Slack (with PNG if first of the day)
+        if: ${{ github.event.inputs.notify_slack == 'true' }}
         env:
           INPUT_DATE: ${{ env.INPUT_DATE }}
           INPUT_SCORE: ${{ env.INPUT_SCORE }}
