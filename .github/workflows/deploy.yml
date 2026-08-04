@@ -35,7 +35,7 @@ jobs:
         run: npm run build:ci
 
       - name: Configure Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v6
 
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
