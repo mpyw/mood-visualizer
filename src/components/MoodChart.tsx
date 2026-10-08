@@ -11,6 +11,7 @@ import {
   ComposedChart,
   Bar,
 } from 'recharts'
+import type { DotItemDotProps, XAxisTickContentProps } from 'recharts'
 import dayjs from 'dayjs'
 import type { MoodDaySummary } from '../utils/parseJsonl'
 
@@ -71,17 +72,10 @@ const MoodChart: React.FC<MoodChartProps> = ({
         }
   )
 
-  const renderCustomTick = ({
-    x,
-    y,
-    payload,
-  }: {
-    x: number
-    y: number
-    payload: { value: string }
-  }) => {
-    const isToday = payload.value === today.format('YYYY-MM-DD')
-    const dateObj = dayjs(payload.value)
+  const renderCustomTick = ({ x, y, payload }: XAxisTickContentProps) => {
+    const date = String(payload.value)
+    const isToday = date === today.format('YYYY-MM-DD')
+    const dateObj = dayjs(date)
     const dayLabel = dateObj.format('D(ddd)')
     return (
       <g transform={`translate(${x},${y})`}>
@@ -101,15 +95,8 @@ const MoodChart: React.FC<MoodChartProps> = ({
     )
   }
 
-  const renderCustomDot = ({
-    cx,
-    cy,
-    payload,
-  }: {
-    cx: number
-    cy: number
-    payload: ChartRow
-  }) => {
+  const renderCustomDot = ({ cx, cy, payload: row }: DotItemDotProps) => {
+    const payload = row as ChartRow
     if (!payload.present) {
       return <></>
     }
@@ -195,15 +182,15 @@ const MoodChart: React.FC<MoodChartProps> = ({
             />
             <YAxis domain={[0, 10]} tickCount={11} />
             <Tooltip
-              formatter={(v: number, name: string, item) => {
+              formatter={(v, name, item) => {
                 if (name === 'High/Low' && item && item.payload) {
-                  const row = item as ChartRow
+                  const row = item.payload as ChartRow
                   if (row.present) {
                     const { high, low } = row
                     return [`High: ${high}\nLow: ${low}`, name]
                   }
                 }
-                return v.toFixed(2)
+                return Number(v).toFixed(2)
               }}
             />
             <Legend />
