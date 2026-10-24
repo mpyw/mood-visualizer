@@ -47,168 +47,76 @@ permissions:
   pages: write
   id-token: write
 
-env:
-  INPUT_DATE: ${{ github.event.inputs.date }}
-  INPUT_SCORE: ${{ github.event.inputs.score }}
-  INPUT_NOTE: ${{ github.event.inputs.note }}
-  INPUT_VERIFY_NDA: ${{ github.event.inputs.verify_nda }}
-  LIST_FILE: public/data/history-list.jsonl
-
 jobs:
   record:
     name: Record Mood History
     runs-on: ubuntu-latest
     steps:
+      - name: Verify NDA
+        # `inputs` keeps the boolean type. `github.event.inputs` turns it into
+        # the string "false", which is truthy, so the check never failed.
+        if: ${{ !inputs.verify_nda }}
+        run: |
+          echo "::error::NDA verification is required. Please check the box in the workflow dispatch inputs."
+          exit 1
+
       - name: Checkout Repository
         uses: actions/checkout@v7
 
-      - name: Verify NDA
-        if: ${{ !github.event.inputs.verify_nda }}
-        run: |
-          echo "NDA verification is required. Please check the box in the workflow dispatch inputs."
-          exit 1
-
-      - name: Parse and Record Inputs
-        id: record
-        run: |
-          import os, sys, json
-          import html
-          from datetime import datetime, timezone, timedelta
-          from pathlib import Path
-
-          # 入力値取得
-          input_date = os.environ.get('INPUT_DATE')
-          input_score = os.environ.get('INPUT_SCORE')
-          input_note = os.environ.get('INPUT_NOTE')
-          list_file = os.environ.get('LIST_FILE')
-          reply_broadcast = os.environ.get('REPLY_BROADCAST')
-
-          # REPLY_BROADCAST: true/false → 1/0
-          if reply_broadcast is not None:
-              if reply_broadcast.lower() == 'true':
-                  reply_broadcast = '1'
-              else:
-                  reply_broadcast = '0'
-              # GITHUB_ENV へ書き出し
-              with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
-                  f.write(f'REPLY_BROADCAST={reply_broadcast}\n')
-
-          # 日付パース: 未入力なら現在時刻（JST)，厳格にISO 8601チェック
-          if not input_date:
-              now = datetime.now(timezone(timedelta(hours=9)))
-              input_date = now.isoformat()
-          try:
-              dt = datetime.fromisoformat(input_date)
-          except Exception:
-              print(f'[ERROR] date は ISO 8601 形式で入力してください: {input_date}', file=sys.stderr)
-              sys.exit(1)
-
-          # 年月日を切り出す
-          input_yearmonth = input_date[:4] + '-' + input_date[5:7]
-          history_file = f'public/data/history/{input_yearmonth}.jsonl'
-
-          # LIST_FILE の更新
-          Path('public/data').mkdir(parents=True, exist_ok=True)
-          Path(list_file).touch(exist_ok=True)
-          found = False
-          with open(list_file, encoding='utf-8') as f:
-              for line in f:
-                  try:
-                      obj = json.loads(line)
-                      if obj.get('date') == input_yearmonth:
-                          found = True
-                          break
-                  except Exception:
-                      continue
-          if not found:
-              with open(list_file, 'a', encoding='utf-8') as f:
-                  f.write(json.dumps({'date': input_yearmonth}, ensure_ascii=False, separators=(',', ':')) + '\n')
-
-          # HISTORY_FILE の更新
-          Path('public/data/history').mkdir(parents=True, exist_ok=True)
-          data = {'date': input_date, 'score': int(input_score)}
-          if input_note:
-              data['note'] = input_note
-          with open(history_file, 'a', encoding='utf-8') as f:
-              f.write(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n')
-
-          # $GITHUB_STEP_SUMMARY への Markdown/HTML 出力
-          def to_jst(dt):
-              if dt.tzinfo is None:
-                  dt = dt.replace(tzinfo=timezone.utc)
-              jst = dt.astimezone(timezone(timedelta(hours=9)))
-              return jst.strftime('%Y-%m-%d %H:%M:%S JST')
-
-          esc = html.escape
-          summary = ["### 追加されたエントリ\n", "<table>"]
-          summary.append(f"<tr>\n<th>Date</th><td>{esc(to_jst(dt))}</td>\n</tr>")
-          summary.append(f"<tr>\n<th>Score</th>\n<td>{esc(str(input_score))}</td>\n</tr>")
-          if input_note:
-              summary.append(f"<tr>\n<th>Note</th>\n<td>{esc(input_note)}</td>\n</tr>")
-          summary.append("</table>\n")
-          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
-              f.write('\n'.join(summary))
-
-          # GITHUB_ENV へ補完済みinput_dateを書き出し
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
-              f.write(f'INPUT_DATE={input_date}\n')
-        env:
-          INPUT_DATE: ${{ env.INPUT_DATE }}
-          INPUT_SCORE: ${{ env.INPUT_SCORE }}
-          INPUT_NOTE: ${{ env.INPUT_NOTE }}
-          LIST_FILE: ${{ env.LIST_FILE }}
-          REPLY_BROADCAST: ${{ github.event.inputs.reply_broadcast }}
-        shell: python
-
-      - name: Set up Node.js
-        if: ${{ github.event.inputs.notify_slack == 'true' }}
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-
-      - name: Install Dependencies (Node.js)
-        if: ${{ github.event.inputs.notify_slack == 'true' }}
-        run: |
-          npm ci --include=dev
-
-      - name: Build and Preview (Vite)
-        if: ${{ github.event.inputs.notify_slack == 'true' }}
-        run: |
-          npm run build:dev
-          npm run preview &
-          sleep 5
-
-      - name: Export PNG via Puppeteer
-        if: ${{ github.event.inputs.notify_slack == 'true' }}
-        run: |
-          npx tsx scripts/export_png.mts
-        env:
-          EXPORT_PNG_URL: http://localhost:4173
-
       - name: Set up Python
-        if: ${{ github.event.inputs.notify_slack == 'true' }}
         uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
-      - name: Install Python dependencies
-        if: ${{ github.event.inputs.notify_slack == 'true' }}
-        run: |
-          pip install requests
-
-      - name: Notify Slack (with PNG if first of the day)
-        if: ${{ github.event.inputs.notify_slack == 'true' }}
+      - name: Record Mood
+        id: record
+        run: python scripts/record_mood.py
         env:
-          INPUT_DATE: ${{ env.INPUT_DATE }}
-          INPUT_SCORE: ${{ env.INPUT_SCORE }}
-          INPUT_NOTE: ${{ env.INPUT_NOTE }}
+          INPUT_DATE: ${{ inputs.date }}
+          INPUT_SCORE: ${{ inputs.score }}
+          INPUT_NOTE: ${{ inputs.note }}
+
+      - name: Set up Node.js
+        if: ${{ inputs.notify_slack }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install Dependencies (Node.js)
+        if: ${{ inputs.notify_slack }}
+        run: npm ci
+
+      - name: Build and Preview (Vite)
+        if: ${{ inputs.notify_slack }}
+        run: |
+          npm run build
+          npm run preview &
+          for _ in $(seq 30); do curl -sf http://localhost:4173 >/dev/null && exit 0; sleep 1; done
+          echo "::error::Preview server did not start" && exit 1
+
+      - name: Export PNG via Puppeteer
+        if: ${{ inputs.notify_slack }}
+        run: npx tsx scripts/export_png.mts
+        env:
+          EXPORT_PNG_URL: http://localhost:4173
+
+      - name: Install Python Dependencies
+        if: ${{ inputs.notify_slack }}
+        run: pip install 'requests>=2.32'
+
+      - name: Notify Slack
+        if: ${{ inputs.notify_slack }}
+        run: python scripts/notify_slack.py
+        env:
+          INPUT_DATE: ${{ steps.record.outputs.date }}
+          INPUT_SCORE: ${{ inputs.score }}
+          INPUT_NOTE: ${{ inputs.note }}
+          REPLY_BROADCAST: ${{ inputs.reply_broadcast }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           SLACK_USER_TOKEN: ${{ secrets.SLACK_USER_TOKEN }}
-          REPLY_BROADCAST: ${{ env.REPLY_BROADCAST }}
-        run: |
-          python scripts/notify_slack.py
 
-      - name: Amend Commit and Push Changes
+      - name: Commit and Push Changes
         uses: ryancyq/github-signed-commit@v1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -217,10 +125,11 @@ jobs:
             public/data/history-list.jsonl
             public/data/history/*.jsonl
             public/data/latest-slack-update.json
+          # Use the completed date: the raw input is empty when omitted.
           commit-message: |
-            ${{ github.event.inputs.date }} / Score [${{ github.event.inputs.score }}]
+            ${{ steps.record.outputs.date }} / Score [${{ inputs.score }}]
 
-            ${{ github.event.inputs.note }}
+            ${{ inputs.note }}
 
   deploy:
     needs: record

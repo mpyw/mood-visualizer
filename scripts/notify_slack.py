@@ -1,185 +1,241 @@
+"""Posts a new mood record to Slack. Called by the record workflow.
+
+The first post of a JST day starts a thread (with the chart PNG when one was
+exported). Later posts of the same day reply in that thread. The thread is
+remembered in public/data/latest-slack-update.json, which the workflow commits.
+
+A Slack failure never fails the workflow: the record itself is already saved.
+"""
+
+from __future__ import annotations
+
+import json
+import mimetypes
 import os
 import sys
-import json
 import time
-import glob
-import mimetypes
-from datetime import datetime, timezone, timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
 import requests
 
-SLACK_USER_TOKEN = os.environ.get('SLACK_USER_TOKEN')
-SLACK_CHANNEL_ID = os.environ.get('SLACK_CHANNEL_ID')
-LATEST_FILE = 'public/data/latest-slack-update.json'
-REPLY_BROADCAST = os.environ.get('REPLY_BROADCAST', '1')  # "1"=on, "0"=off
+JST = timezone(timedelta(hours=9))
+STATE_FILE = Path('public/data/latest-slack-update.json')
+API = 'https://slack.com/api'
+TIMEOUT = 30
 
-def find_latest_png():
-    png_files = glob.glob('*_mood_chart.png')
-    if not png_files:
-        return None
-    return max(png_files, key=os.path.getmtime)
+MOOD_EMOJIS = [
+    (10, ':star-struck:'),
+    (8, ':grinning:'),
+    (6, ':slightly_smiling_face:'),
+    (4, ':neutral_face:'),
+    (2, ':slightly_frowning_face:'),
+    (0, ':disappointed:'),
+]
 
-def build_blocks(input_date, score, note):
+
+def mood_emoji(score: str) -> str:
     try:
-        s = float(score)
-    except Exception:
-        s = None
-    if s is None: mood_emoji = ':grey_question:'
-    elif s >= 10: mood_emoji = ':star-struck:'
-    elif s >= 8:  mood_emoji = ':grinning:'
-    elif s >= 6:  mood_emoji = ':slightly_smiling_face:'
-    elif s >= 4:  mood_emoji = ':neutral_face:'
-    elif s >= 2:  mood_emoji = ':slightly_frowning_face:'
-    else:         mood_emoji = ':disappointed:'
+        value = float(score)
+    except (TypeError, ValueError):
+        return ':grey_question:'
+    for min_score, emoji in MOOD_EMOJIS:
+        if value >= min_score:
+            return emoji
+    return MOOD_EMOJIS[-1][1]
 
-    blocks = [
-        {"type": "header", "text": {"type": "plain_text", "text": "新しい気分記録", "emoji": True}},
-        {"type": "context", "elements": [{"type": "mrkdwn", "text": f"*記録日*: {input_date}（JST）"}]},
-        {"type": "section", "fields": [{"type": "mrkdwn", "text": f"*スコア*\n{score} {mood_emoji}"}]},
+
+def build_text(date: str, score: str, note: str | None) -> str:
+    """Plain-text fallback for notifications."""
+    return f'新しい気分記録: {date}\nスコア: {score}' + (f'\nメモ: {note}' if note else '')
+
+
+def build_blocks(date: str, score: str, note: str | None) -> list[dict]:
+    blocks: list[dict] = [
+        {
+            'type': 'header',
+            'text': {'type': 'plain_text', 'text': '新しい気分記録', 'emoji': True},
+        },
+        {'type': 'context', 'elements': [{'type': 'mrkdwn', 'text': f'*記録日*: {date}（JST）'}]},
+        {
+            'type': 'section',
+            'fields': [{'type': 'mrkdwn', 'text': f'*スコア*\n{score} {mood_emoji(score)}'}],
+        },
     ]
     if note:
+        quoted = '\n'.join(f'>{line}' for line in note.splitlines())
         blocks += [
-            {"type": "divider"},
-            {"type": "section", "text": {"type": "mrkdwn", "text": f"*メモ*\n>{note}"}}
+            {'type': 'divider'},
+            {'type': 'section', 'text': {'type': 'mrkdwn', 'text': f'*メモ*\n{quoted}'}},
         ]
     return blocks
 
-def get_upload_url_external(file_path, alt_text=None):
-    size = os.path.getsize(file_path)
-    headers = {
-        'Authorization': f'Bearer {SLACK_USER_TOKEN}',
-        'Content-Type': 'application/x-www-form-urlencoded'
-    }
-    data = {"filename": os.path.basename(file_path), "length": str(size)}
-    if alt_text:
-        data["alt_txt"] = alt_text
-    resp = requests.post('https://slack.com/api/files.getUploadURLExternal',
-                         headers=headers, data=data)
-    resp.raise_for_status()
-    j = resp.json()
-    if not j.get("ok"):
-        raise RuntimeError(f"Slack API error (getUploadURLExternal): {j}")
-    return j["upload_url"], j["file_id"]
 
-def post_file_bytes_to_upload_url(upload_url, file_path):
-    size = os.path.getsize(file_path)
-    mime = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
-    with open(file_path, 'rb') as f:
-        resp = requests.post(upload_url, data=f,
-                             headers={'Content-Type': mime, 'Content-Length': str(size)})
-    if resp.status_code != 200:
-        raise RuntimeError(f"Upload failed: HTTP {resp.status_code} {resp.text[:200]}")
+@dataclass(frozen=True)
+class State:
+    date: str | None = None
+    thread_ts: str | None = None
 
-def complete_upload_with_blocks(file_id, channel_id, title, blocks, thread_ts=None):
-    # files.completeUploadExternal は reply_broadcast 未対応（thread_ts のみ）
-    headers = {'Authorization': f'Bearer {SLACK_USER_TOKEN}',
-               'Content-Type': 'application/json; charset=utf-8'}
-    payload = {
-        "files": [{"id": file_id, "title": title}],
-        "channel_id": channel_id,
-        "blocks": blocks
-        # initial_comment は blocks と同時に送らない（無視される）
-    }
-    if thread_ts:
-        payload["thread_ts"] = thread_ts
-    resp = requests.post('https://slack.com/api/files.completeUploadExternal',
-                         headers=headers, json=payload)
-    resp.raise_for_status()
-    j = resp.json()
-    if not j.get("ok"):
-        raise RuntimeError(f"Slack API error (completeUploadExternal): {j}")
-    return j
+    def thread_for(self, today: str) -> str | None:
+        """Thread to reply to, or None when today's thread is not started yet."""
+        return self.thread_ts if self.date == today else None
 
-def get_message_ts_from_file_share(file_id, channel_id, max_retries=6, base_sleep=0.5):
-    headers = {'Authorization': f'Bearer {SLACK_USER_TOKEN}'}
-    for i in range(max_retries):
-        resp = requests.get('https://slack.com/api/files.info',
-                            headers=headers, params={"file": file_id})
+
+def load_state(path: Path = STATE_FILE) -> State:
+    if not path.exists():
+        return State()
+    obj = json.loads(path.read_text(encoding='utf-8'))
+    return State(date=obj.get('date'), thread_ts=obj.get('thread_ts'))
+
+
+def save_state(state: State, path: Path = STATE_FILE) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({'date': state.date, 'thread_ts': state.thread_ts}, ensure_ascii=False),
+        encoding='utf-8',
+    )
+
+
+def parse_bool(value: str | None, default: bool) -> bool:
+    if value is None or value == '':
+        return default
+    return value.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def find_latest_png() -> Path | None:
+    files = list(Path().glob('*_mood_chart.png'))
+    return max(files, key=lambda f: f.stat().st_mtime) if files else None
+
+
+class SlackClient:
+    def __init__(self, token: str, channel: str):
+        self.token = token
+        self.channel = channel
+
+    def _call(self, method: str, **kwargs) -> dict:
+        resp = requests.post(
+            f'{API}/{method}',
+            headers={'Authorization': f'Bearer {self.token}'},
+            timeout=TIMEOUT,
+            **kwargs,
+        )
         resp.raise_for_status()
-        j = resp.json()
-        if j.get("ok"):
-            file = j.get("file", {})
-            shares = file.get("shares", {})
-            for scope_key in ("public", "private"):
-                if scope_key in shares and channel_id in shares[scope_key]:
-                    entries = shares[scope_key][channel_id]
-                    if entries:
-                        ts = entries[-1].get("ts")
-                        if ts:
-                            return ts
-        time.sleep(base_sleep * (2 ** i))
-    return None
+        body = resp.json()
+        if not body.get('ok'):
+            raise RuntimeError(f'Slack API error ({method}): {body}')
+        return body
 
-def chat_post_blocks(channel_id, text, blocks, thread_ts=None, reply_broadcast=False):
-    headers = {'Authorization': f'Bearer {SLACK_USER_TOKEN}',
-               'Content-Type': 'application/json; charset=utf-8'}
-    payload = {"channel": channel_id, "text": text, "blocks": blocks}
+    def post_message(
+        self, text: str, blocks: list[dict], thread_ts: str | None, reply_broadcast: bool
+    ) -> str:
+        payload: dict = {'channel': self.channel, 'text': text, 'blocks': blocks}
+        if thread_ts:
+            payload['thread_ts'] = thread_ts
+            # reply_broadcast only works together with thread_ts.
+            if reply_broadcast:
+                payload['reply_broadcast'] = True
+        return self._call('chat.postMessage', json=payload)['ts']
+
+    def post_file(self, path: Path, blocks: list[dict]) -> str | None:
+        """Uploads a file with blocks as a new message. Returns its ts."""
+        size = path.stat().st_size
+        upload = self._call(
+            'files.getUploadURLExternal',
+            data={'filename': path.name, 'length': str(size), 'alt_txt': '今日の気分記録'},
+        )
+        mime = mimetypes.guess_type(path)[0] or 'application/octet-stream'
+        with path.open('rb') as f:
+            resp = requests.post(
+                upload['upload_url'],
+                data=f,
+                headers={'Content-Type': mime, 'Content-Length': str(size)},
+                timeout=TIMEOUT,
+            )
+        if resp.status_code != 200:
+            raise RuntimeError(f'Upload failed: HTTP {resp.status_code} {resp.text[:200]}')
+        # initial_comment is ignored when blocks are given, so it is not sent.
+        self._call(
+            'files.completeUploadExternal',
+            json={
+                'files': [{'id': upload['file_id'], 'title': path.name}],
+                'channel_id': self.channel,
+                'blocks': blocks,
+            },
+        )
+        return self._message_ts_of_file(upload['file_id'])
+
+    def _message_ts_of_file(self, file_id: str, retries: int = 6) -> str | None:
+        """The share appears asynchronously, so poll with backoff."""
+        for i in range(retries):
+            resp = requests.get(
+                f'{API}/files.info',
+                headers={'Authorization': f'Bearer {self.token}'},
+                params={'file': file_id},
+                timeout=TIMEOUT,
+            )
+            resp.raise_for_status()
+            shares = resp.json().get('file', {}).get('shares', {})
+            for scope in ('public', 'private'):
+                entries = shares.get(scope, {}).get(self.channel) or []
+                if entries and (ts := entries[-1].get('ts')):
+                    return ts
+            time.sleep(0.5 * 2**i)
+        return None
+
+
+def notify(
+    client: SlackClient,
+    state: State,
+    *,
+    date: str,
+    score: str,
+    note: str | None,
+    today: str,
+    png: Path | None,
+    reply_broadcast: bool,
+) -> State:
+    """Posts the record and returns the state to save."""
+    text = build_text(date, score, note)
+    blocks = build_blocks(date, score, note)
+    thread_ts = state.thread_for(today)
     if thread_ts:
-        payload["thread_ts"] = thread_ts
-        # reply_broadcast は thread_ts とセットのときのみ有効
-        if reply_broadcast:
-            payload["reply_broadcast"] = True
-    resp = requests.post('https://slack.com/api/chat.postMessage', headers=headers, json=payload)
-    resp.raise_for_status()
-    j = resp.json()
-    if not j.get("ok"):
-        raise RuntimeError(f"Slack API error (chat.postMessage): {j}")
-    return j["ts"]
+        client.post_message(text, blocks, thread_ts=thread_ts, reply_broadcast=reply_broadcast)
+        return state
+    if png:
+        ts = client.post_file(png, blocks)
+    else:
+        ts = client.post_message(text, blocks, thread_ts=None, reply_broadcast=False)
+    return State(date=today, thread_ts=ts)
 
-def load_state():
-    if not os.path.exists(LATEST_FILE):
-        return {"date": None, "thread_ts": None}
-    with open(LATEST_FILE, encoding='utf-8') as f:
-        obj = json.load(f)
-    return {"date": obj.get("date"), "thread_ts": obj.get("thread_ts")}
 
-def save_state(date_str, thread_ts):
-    Path(LATEST_FILE).parent.mkdir(parents=True, exist_ok=True)
-    with open(LATEST_FILE, 'w', encoding='utf-8') as f:
-        json.dump({'date': date_str, 'thread_ts': thread_ts}, f, ensure_ascii=False)
+def main() -> int:
+    token = os.environ.get('SLACK_USER_TOKEN')
+    channel = os.environ.get('SLACK_CHANNEL_ID')
+    if not token or not channel:
+        print(
+            '::notice::SLACK_USER_TOKEN または SLACK_CHANNEL_ID が未設定のため'
+            ' Slack 投稿をスキップしました'
+        )
+        return 0
+    try:
+        state = load_state()
+        new_state = notify(
+            SlackClient(token, channel),
+            state,
+            date=os.environ.get('INPUT_DATE', ''),
+            score=os.environ.get('INPUT_SCORE', ''),
+            note=os.environ.get('INPUT_NOTE') or None,
+            today=datetime.now(JST).strftime('%Y-%m-%d'),
+            png=find_latest_png(),
+            reply_broadcast=parse_bool(os.environ.get('REPLY_BROADCAST'), default=True),
+        )
+        if new_state != state:
+            save_state(new_state)
+    except Exception as e:
+        print(f'::warning::Slack 投稿に失敗しましたが記録は継続します: {e}')
+    return 0
+
 
 if __name__ == '__main__':
-    if not SLACK_USER_TOKEN or not SLACK_CHANNEL_ID:
-        # トークン/チャンネル未設定なら Slack 投稿をスキップ（記録ワークフローは継続）
-        print('::notice::SLACK_USER_TOKEN または SLACK_CHANNEL_ID が未設定のため Slack 投稿をスキップしました')
-        sys.exit(0)
-
-    score = os.environ.get('INPUT_SCORE')
-    note = os.environ.get('INPUT_NOTE')
-    input_date = os.environ.get('INPUT_DATE')
-
-    now = datetime.now(timezone(timedelta(hours=9)))
-    today_str = now.strftime('%Y-%m-%d')
-
-    state = load_state()
-    latest_date = state["date"]
-    saved_thread_ts = state["thread_ts"]
-    is_first_today = (latest_date != today_str or not saved_thread_ts)
-
-    try:
-        text = f'新しい気分記録: {input_date}\nスコア: {score}' + (f'\nメモ: {note}' if note else "")
-        blocks = build_blocks(input_date, score, note)
-
-        if is_first_today:
-            png_path = find_latest_png()
-            if png_path and os.path.exists(png_path):
-                upload_url, file_id = get_upload_url_external(png_path, alt_text="今日の気分記録")
-                post_file_bytes_to_upload_url(upload_url, png_path)
-                complete_upload_with_blocks(file_id, SLACK_CHANNEL_ID,
-                                            title=os.path.basename(png_path),
-                                            blocks=blocks)
-                parent_ts = get_message_ts_from_file_share(file_id, SLACK_CHANNEL_ID)
-                save_state(today_str, parent_ts)
-            else:
-                parent_ts = chat_post_blocks(SLACK_CHANNEL_ID, text=text, blocks=blocks)
-                save_state(today_str, parent_ts)
-        else:
-            # 2回目以降はスレッド返信。reply_broadcast を必要に応じて付ける
-            rb = (REPLY_BROADCAST == '1')
-            chat_post_blocks(SLACK_CHANNEL_ID, text=text, blocks=blocks,
-                             thread_ts=saved_thread_ts, reply_broadcast=rb)
-
-    except Exception as e:
-        # 投稿失敗（トークン失効・権限不足・API 仕様変更等）でも記録ワークフローは落とさない
-        print(f'::warning::Slack 投稿に失敗しましたが記録は継続します: {e}')
-        sys.exit(0)
+    sys.exit(main())
