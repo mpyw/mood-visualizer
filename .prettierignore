@@ -2,3 +2,6 @@
 .prettierignore
 public/data/latest-slack-update.json
 .github/dependabot.yml
+coverage
+uv.lock
+.venv
