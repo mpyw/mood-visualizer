@@ -1,9 +1,10 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
+import { resolveBase } from './scripts/base'
 
 export default defineConfig({
   plugins: [react()],
-  base: process.env.VITE_BASE_PATH || '/',
+  base: resolveBase(process.env.VITE_BASE_PATH),
   test: {
     environment: 'jsdom',
     setupFiles: ['src/test/setup.ts'],
