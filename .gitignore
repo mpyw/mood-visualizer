@@ -2,3 +2,9 @@
 /node_modules/
 /dist/
 /.env
+/coverage/
+/.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*_mood_chart.png

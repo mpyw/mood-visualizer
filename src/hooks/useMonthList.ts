@@ -1,46 +1,25 @@
 import { useEffect, useState } from 'react'
+import { fetchMonthList } from '../api/history'
+import type { YearMonth } from '../domain/month'
 
-function getCurrentMonth() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
+export type MonthListState =
+  | { status: 'loading' }
+  | { status: 'success'; months: YearMonth[] }
+  | { status: 'error' }
 
-const BASE_PATH = import.meta.env.VITE_BASE_PATH || ''
-
-export function useMonthList() {
-  const [months, setMonths] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+export function useMonthList(): MonthListState {
+  const [state, setState] = useState<MonthListState>({ status: 'loading' })
 
   useEffect(() => {
-    ;(async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await fetch(`${BASE_PATH}/data/history-list.jsonl`, {
-          cache: 'no-cache',
-        })
-        if (!res.ok) throw new Error()
-        const text = await res.text()
-        const months = text
-          .split('\n')
-          .map((line) => {
-            try {
-              return JSON.parse(line).date
-            } catch {
-              return null
-            }
-          })
-          .filter((d): d is string => !!d)
-        setMonths(months.reverse())
-      } catch {
-        setMonths([getCurrentMonth()])
-        setError('月リストの取得に失敗しました')
-      } finally {
-        setLoading(false)
+    const controller = new AbortController()
+    fetchMonthList(controller.signal).then(
+      (months) => setState({ status: 'success', months }),
+      () => {
+        if (!controller.signal.aborted) setState({ status: 'error' })
       }
-    })()
+    )
+    return () => controller.abort()
   }, [])
 
-  return { months, loading, error }
+  return state
 }

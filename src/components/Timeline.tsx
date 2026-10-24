@@ -1,192 +1,105 @@
-import React, {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
-import { TimelineCard, type TimelineEntry } from './TimelineCard'
+import { useEffect, useRef, useState } from 'react'
+import { hasNote, type MoodRecord } from '../domain/mood'
+import { Checkbox } from './Checkbox'
+import styles from './Timeline.module.css'
+import { TimelineCard } from './TimelineCard'
 
-export type TimelineHandle = {
-  scrollToExactDate: (date: string) => Promise<boolean>
+const PAGE_SIZE = 20
+
+/** A request to scroll to a record. A new object scrolls again. */
+export type TimelineFocus = { date: string }
+
+/**
+ * Item count that includes the focused record with a few more after it, so
+ * that it can be scrolled to the center of the screen.
+ */
+function itemsToShow(focusIndex: number): number {
+  if (focusIndex < 0) return 0
+  return Math.ceil((focusIndex + 1 + FOCUS_MARGIN) / PAGE_SIZE) * PAGE_SIZE
 }
 
-export const Timeline = React.memo(
-  forwardRef<
-    TimelineHandle,
-    {
-      entries: TimelineEntry[]
-      showOnlyWithNote: boolean
-      setShowOnlyWithNote: (v: boolean) => void
-    }
-  >(({ entries, showOnlyWithNote, setShowOnlyWithNote }, ref) => {
-    const [page, setPage] = useState(1)
-    const loader = useRef<HTMLDivElement | null>(null)
-    const pageSize = 20
-    const dateRefs = useRef<Record<string, HTMLDivElement | null>>({})
+const FOCUS_MARGIN = 5
 
-    const filteredEntries = useMemo(
-      () =>
-        showOnlyWithNote
-          ? entries.filter((e) => e.note && e.note.trim() !== '')
-          : entries,
-      [entries, showOnlyWithNote]
-    )
-    const pagedEntries = useMemo(
-      () => filteredEntries.slice(0, page * pageSize),
-      [filteredEntries, page, pageSize]
-    )
-    const hasMore = useMemo(
-      () => filteredEntries.length > pagedEntries.length,
-      [filteredEntries, pagedEntries]
-    )
+type Props = {
+  records: readonly MoodRecord[]
+  notesOnly: boolean
+  onNotesOnlyChange: (notesOnly: boolean) => void
+  focus: TimelineFocus | null
+}
 
-    const handleObserver = useCallback(
-      (entriesObs: IntersectionObserverEntry[]) => {
-        const target = entriesObs[0]
-        if (target.isIntersecting && hasMore) setPage((p) => p + 1)
-      },
-      [hasMore]
-    )
+export function Timeline({
+  records,
+  notesOnly,
+  onNotesOnlyChange,
+  focus,
+}: Props) {
+  const [pages, setPages] = useState(1)
+  const sentinel = useRef<HTMLDivElement>(null)
+  const items = useRef(new Map<string, HTMLElement>())
 
-    useEffect(() => {
-      const option = { root: null, rootMargin: '0px', threshold: 1.0 }
-      const observer = new window.IntersectionObserver(handleObserver, option)
-      const loaderEl = loader.current
-      if (loaderEl) observer.observe(loaderEl)
-      return () => {
-        if (loaderEl) observer.unobserve(loaderEl)
+  const visible = notesOnly ? records.filter(hasNote) : records
+  const focusIndex = focus
+    ? visible.findIndex((r) => r.date === focus.date)
+    : -1
+  const shownCount = Math.max(pages * PAGE_SIZE, itemsToShow(focusIndex))
+  const shown = visible.slice(0, shownCount)
+  const hasMore = visible.length > shown.length
+
+  useEffect(() => {
+    const el = sentinel.current
+    if (!el || !hasMore) return
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setPages(Math.ceil(shownCount / PAGE_SIZE) + 1)
       }
-    }, [handleObserver])
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasMore, shownCount])
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        scrollToExactDate: async (date: string): Promise<boolean> => {
-          let el = dateRefs.current[date]
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            window.location.hash = date
-            return true
-          } else {
-            // filteredEntriesでページング判定
-            const idx = filteredEntries.findIndex((e) => e.date === date)
-            if (idx !== -1 && idx >= page * pageSize) {
-              const newPage = Math.ceil((idx + 1) / pageSize)
-              setPage(newPage)
-              // ページング後、要素が描画されるまで待機
-              for (let i = 0; i < 20; i++) {
-                await new Promise((r) => setTimeout(r, 50))
-                el = dateRefs.current[date]
-                if (el) {
-                  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                  window.location.hash = date
-                  return true
-                }
-              }
-            }
-            return false
-          }
-        },
-      }),
-      [filteredEntries, page, pageSize]
-    )
+  useEffect(() => {
+    if (!focus) return
+    const el = items.current.get(focus.date)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    history.replaceState(null, '', `#${focus.date}`)
+  }, [focus])
 
-    return (
-      <div style={{ maxWidth: 560, margin: '0 auto', padding: '32px 0' }}>
-        <div
-          style={{
-            position: 'sticky',
-            top: 0,
-            left: 0,
-            right: 0,
-            zIndex: 2,
-            background: '#e4e6ea',
-            width: '100vw',
-            minWidth: '100%',
-            borderRadius: 0,
-            marginLeft: 'calc(50% - 50vw)',
-            marginRight: 'calc(50% - 50vw)',
-            marginBottom: 18,
-            paddingTop: 4,
-            paddingBottom: 16,
-            display: 'block',
+  return (
+    <section className={styles.timeline}>
+      <div className={styles.stickyHeader}>
+        <h2 className={styles.heading}>Mood Timeline</h2>
+        <Checkbox
+          className={styles.filter}
+          checked={notesOnly}
+          onChange={(checked) => {
+            onNotesOnlyChange(checked)
+            setPages(1)
           }}
         >
-          <h2 style={{ textAlign: 'center', marginBottom: 12, marginTop: 0 }}>
-            Mood Timeline
-          </h2>
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              justifyContent: 'center',
-              padding: '4px 10px',
-              boxShadow: 'none',
-              fontSize: 15,
-              cursor: 'pointer',
-              marginBottom: 0,
-              background: 'none',
+          Note 付きのみ
+        </Checkbox>
+      </div>
+      <div className={styles.list}>
+        {shown.map((record) => (
+          <div
+            key={record.date}
+            id={record.date}
+            ref={(el) => {
+              if (el) items.current.set(record.date, el)
+              else items.current.delete(record.date)
             }}
           >
-            <input
-              type="checkbox"
-              checked={showOnlyWithNote}
-              onChange={(e) => {
-                setShowOnlyWithNote(e.target.checked)
-                setPage(1)
-              }}
-              style={{
-                accentColor: '#646cff',
-                width: 18,
-                height: 18,
-                marginRight: 4,
-              }}
-            />
-            <span style={{ userSelect: 'none', color: '#666' }}>
-              Note 付きのみ
-            </span>
-          </label>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-          }}
-        >
-          {(() => {
-            return pagedEntries.map((entry) => (
-              <div
-                key={entry.date}
-                ref={(el) => {
-                  if (el) {
-                    dateRefs.current[entry.date] = el
-                  } else {
-                    delete dateRefs.current[entry.date]
-                  }
-                }}
-              >
-                <TimelineCard entry={entry} />
-              </div>
-            ))
-          })()}
-        </div>
-        <div ref={loader} />
-        {!hasMore && pagedEntries.length > 0 && (
-          <p style={{ textAlign: 'center', color: '#aaa' }}>
-            これ以上ありません
-          </p>
-        )}
-        {pagedEntries.length === 0 && (
-          <p style={{ textAlign: 'center', color: '#aaa' }}>
-            データがありません
-          </p>
-        )}
+            <TimelineCard record={record} />
+          </div>
+        ))}
       </div>
-    )
-  })
-)
+      <div ref={sentinel} />
+      {shown.length === 0 ? (
+        <p className={styles.end}>データがありません</p>
+      ) : (
+        !hasMore && <p className={styles.end}>これ以上ありません</p>
+      )}
+    </section>
+  )
+}

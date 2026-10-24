@@ -1,82 +1,58 @@
-import React from 'react'
+import { memo, type MouseEvent, type RefObject } from 'react'
 import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
   Line,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ErrorBar,
-  ResponsiveContainer,
-  Legend,
-  ComposedChart,
-  Bar,
+  type BarShapeProps,
+  type DotItemDotProps,
+  type XAxisTickContentProps,
 } from 'recharts'
-import type { DotItemDotProps, XAxisTickContentProps } from 'recharts'
-import dayjs from 'dayjs'
-import type { MoodDaySummary } from '../utils/parseJsonl'
+import { MAX_SCORE, MIN_SCORE } from '../domain/mood'
+import type { YearMonth } from '../domain/month'
+import {
+  buildChartRows,
+  dayLabel,
+  type ChartRow,
+  type MoodDaySummary,
+} from '../domain/summary'
+import type { Dayjs } from '../domain/time'
 
-export type MoodChartProps = {
-  data: MoodDaySummary[]
-  month: string
-  chartRef?: React.RefObject<SVGSVGElement>
-  onDotClick?: (date: string) => void
+const TODAY_COLOR = '#d32f2f'
+const LINE_COLOR = 'mediumseagreen'
+const RANGE_COLOR = '#bfc6e0'
+const RANGE_LABEL = 'High/Low'
+const HEIGHT = 540
+
+type Props = {
+  month: YearMonth
+  /** Days to plot, from `selectChartDays`. */
+  days: readonly MoodDaySummary[]
+  today: Dayjs
+  // recharts-to-png hands out an untyped ref.
+  // oxlint-disable-next-line typescript/no-explicit-any
+  chartRef?: RefObject<any>
+  onDayClick?: (day: string) => void
 }
 
-type ChartRow =
-  | {
-      present: true
-      date: string
-      avg: number
-      low: number
-      high: number
-      error: number[]
-    }
-  | { present: false; date: string }
-
-const MoodChart: React.FC<MoodChartProps> = ({
-  data,
+export const MoodChart = memo(function MoodChart({
   month,
+  days,
+  today,
   chartRef,
-  onDotClick,
-}) => {
-  // 月初・月末・本日の日付を取得し、グラフ表示範囲を決定
-  const startDate = dayjs(month + '-01')
-  const lastDayOfMonth = startDate.endOf('month')
-  const today = dayjs()
-  const endDate = today.isBefore(lastDayOfMonth) ? today : lastDayOfMonth
+  onDayClick,
+}: Props) {
+  const rows = buildChartRows(month, days, today)
+  const todayDate = today.format('YYYY-MM-DD')
 
-  // 月内の表示対象日付リストを生成
-  const allDates = Array.from(
-    { length: endDate.diff(startDate, 'day') + 1 },
-    (_, i) => startDate.add(i, 'day').format('YYYY-MM-DD')
-  )
-
-  // 日付ごとにデータを補完
-  const summaryByDate = Object.fromEntries(data.map((d) => [d.date, d]))
-  const chartData: ChartRow[] = allDates.map((date) =>
-    summaryByDate[date]
-      ? {
-          present: true,
-          date,
-          avg: summaryByDate[date].avg,
-          low: summaryByDate[date].low,
-          high: summaryByDate[date].high,
-          error: [
-            summaryByDate[date].avg - summaryByDate[date].low,
-            summaryByDate[date].high - summaryByDate[date].avg,
-          ],
-        }
-      : {
-          present: false,
-          date,
-        }
-  )
-
-  const renderCustomTick = ({ x, y, payload }: XAxisTickContentProps) => {
+  const renderTick = ({ x, y, payload }: XAxisTickContentProps) => {
     const date = String(payload.value)
-    const isToday = date === today.format('YYYY-MM-DD')
-    const dateObj = dayjs(date)
-    const dayLabel = dateObj.format('D(ddd)')
+    const isToday = date === todayDate
     return (
       <g transform={`translate(${x},${y})`}>
         <text
@@ -84,165 +60,142 @@ const MoodChart: React.FC<MoodChartProps> = ({
           y={0}
           dy={16}
           textAnchor="end"
-          fill={isToday ? '#d32f2f' : '#666'}
+          fill={isToday ? TODAY_COLOR : '#666'}
           fontWeight={isToday ? 'bold' : 'normal'}
           fontSize={isToday ? 15 : 12}
           transform="rotate(-35)"
         >
-          {dayLabel}
+          {dayLabel(date, month)}
         </text>
       </g>
     )
   }
 
-  const renderCustomDot = ({ cx, cy, payload: row }: DotItemDotProps) => {
-    const payload = row as ChartRow
-    if (!payload.present) {
-      return <></>
-    }
-    const isToday = payload.date === today.format('YYYY-MM-DD')
-    const handleClick = (e: React.MouseEvent) => {
+  const renderDot = ({ cx, cy, payload }: DotItemDotProps) => {
+    const row = payload as ChartRow
+    if (!row.present) return <g key={row.date} />
+    const handleClick = (e: MouseEvent) => {
       e.stopPropagation()
-      onDotClick?.(payload.date)
+      onDayClick?.(row.date)
     }
-    return isToday ? (
-      <g onClick={handleClick} style={{ cursor: 'pointer' }} key={payload.date}>
-        <circle
-          cx={cx}
-          cy={cy}
-          r={10}
-          fill="#fff"
-          stroke="#d32f2f"
-          strokeWidth={4}
-          style={{ filter: 'drop-shadow(0 0 6px #d32f2faa)' }}
-        />
-        <circle
-          cx={cx}
-          cy={cy}
-          r={5}
-          fill="#d32f2f"
-          stroke="#fff"
-          strokeWidth={2}
-        />
-      </g>
-    ) : (
+    if (row.date === todayDate) {
+      return (
+        <g
+          key={row.date}
+          onClick={handleClick}
+          style={{ cursor: 'pointer' }}
+          data-testid={`dot-${row.date}`}
+        >
+          <circle
+            cx={cx}
+            cy={cy}
+            r={10}
+            fill="#fff"
+            stroke={TODAY_COLOR}
+            strokeWidth={4}
+            style={{ filter: `drop-shadow(0 0 6px ${TODAY_COLOR}aa)` }}
+          />
+          <circle
+            cx={cx}
+            cy={cy}
+            r={5}
+            fill={TODAY_COLOR}
+            stroke="#fff"
+            strokeWidth={2}
+          />
+        </g>
+      )
+    }
+    return (
       <circle
-        key={payload.date}
+        key={row.date}
         cx={cx}
         cy={cy}
         r={4}
-        fill="mediumseagreen"
+        fill={LINE_COLOR}
         onClick={handleClick}
         style={{ cursor: 'pointer' }}
+        data-testid={`dot-${row.date}`}
+      />
+    )
+  }
+
+  const renderRange = ({ x, y, width, height, payload }: BarShapeProps) => {
+    const isToday = (payload as ChartRow).date === todayDate
+    return (
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill={isToday ? TODAY_COLOR : RANGE_COLOR}
+        opacity={isToday ? 0.9 : 0.7}
+        rx={2}
       />
     )
   }
 
   return (
-    <div
-      style={{
-        width: '100%',
-        minWidth: 320,
-        background: 'none',
-        borderRadius: 0,
-        boxShadow: 'none',
-        padding: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-      }}
-    >
-      <div style={{ position: 'relative', width: '100%', height: 540 }}>
-        <ResponsiveContainer width="100%" height={540}>
-          <ComposedChart
-            data={chartData}
-            margin={{ top: 56, right: 40, left: 20, bottom: 32 }}
-            ref={chartRef}
+    <div style={{ position: 'relative', width: '100%', minWidth: 320 }}>
+      <ResponsiveContainer width="100%" height={HEIGHT}>
+        <ComposedChart
+          data={rows}
+          margin={{ top: 56, right: 40, left: 20, bottom: 32 }}
+          ref={chartRef}
+        >
+          <text
+            x="50%"
+            y={28}
+            textAnchor="middle"
+            fontSize={22}
+            fontWeight="bold"
+            fill="#222"
+            style={{ pointerEvents: 'none', userSelect: 'none' }}
           >
-            <text
-              x="50%"
-              y={28}
-              textAnchor="middle"
-              fontSize={22}
-              fontWeight="bold"
-              fill="#222"
-              style={{ pointerEvents: 'none', userSelect: 'none' }}
-            >
-              Mood Chart of {month}
-            </text>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis
-              dataKey="date"
-              angle={-45}
-              textAnchor="end"
-              height={60}
-              tick={renderCustomTick}
-            />
-            <YAxis domain={[0, 10]} tickCount={11} />
-            <Tooltip
-              formatter={(v, name, item) => {
-                if (name === 'High/Low' && item && item.payload) {
-                  const row = item.payload as ChartRow
-                  if (row.present) {
-                    const { high, low } = row
-                    return [`High: ${high}\nLow: ${low}`, name]
-                  }
-                }
-                return Number(v).toFixed(2)
-              }}
-            />
-            <Legend />
-            <Bar
-              dataKey="low"
-              fill="#bfc6e0"
-              barSize={8}
-              name="High/Low"
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              shape={(props: any) => {
-                const { x, width, payload, y, height } = props
-                const barHeight =
-                  ((payload.high - payload.low) / (payload.low - 0 || 1)) *
-                  height
-                const yHigh = y - barHeight
-                return (
-                  <rect
-                    x={x}
-                    y={yHigh}
-                    width={width}
-                    height={barHeight}
-                    fill={
-                      payload.date === today.format('YYYY-MM-DD')
-                        ? '#d32f2f'
-                        : '#bfc6e0'
-                    }
-                    opacity={
-                      payload.date === today.format('YYYY-MM-DD') ? 0.9 : 0.7
-                    }
-                    rx={2}
-                  />
-                )
-              }}
-              isAnimationActive={false}
-            />
-            <ErrorBar dataKey="error" width={8} stroke="gray" direction="y" />
-            <Line
-              type="monotone"
-              dataKey="avg"
-              stroke="mediumseagreen"
-              strokeWidth={3}
-              dot={renderCustomDot}
-              activeDot={false}
-              name="Avg"
-              isAnimationActive={false}
-              connectNulls={true}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
+            Mood Chart of {month}
+          </text>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis
+            dataKey="date"
+            // The custom tick draws the labels, but recharts still uses the
+            // angle to decide how many labels fit.
+            angle={-45}
+            textAnchor="end"
+            height={60}
+            tick={renderTick}
+          />
+          <YAxis domain={[MIN_SCORE, MAX_SCORE]} tickCount={11} />
+          <Tooltip
+            formatter={(value, name, item) => {
+              const row = item?.payload as ChartRow | undefined
+              if (name === RANGE_LABEL && row?.present) {
+                return [`High: ${row.high}\nLow: ${row.low}`, name]
+              }
+              return Number(value).toFixed(2)
+            }}
+          />
+          <Legend />
+          <Bar
+            dataKey="range"
+            fill={RANGE_COLOR}
+            barSize={8}
+            name={RANGE_LABEL}
+            shape={renderRange}
+            isAnimationActive={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="avg"
+            stroke={LINE_COLOR}
+            strokeWidth={3}
+            dot={renderDot}
+            activeDot={false}
+            name="Avg"
+            isAnimationActive={false}
+            connectNulls
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
     </div>
   )
-}
-
-export default React.memo(MoodChart)
+})

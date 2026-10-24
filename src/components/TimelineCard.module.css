@@ -1,0 +1,60 @@
+.card {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 16px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px #0001;
+  padding: 24px;
+  margin: 0 0 18px;
+  min-height: 120px;
+  width: 520px;
+  max-width: 520px;
+}
+
+.avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+}
+
+.body {
+  flex: 1;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user {
+  font-weight: 700;
+  color: #222;
+  font-size: 18px;
+}
+
+.time {
+  color: #888;
+  font-size: 13px;
+}
+
+.score {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #646cff;
+}
+
+.note {
+  margin: 14px 0 0;
+  font-size: 17px;
+  color: #222;
+  white-space: pre-wrap;
+  line-height: 1.7;
+  background: #f3f6fd;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-weight: 500;
+}
